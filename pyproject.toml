@@ -1,0 +1,18 @@
+[project]
+name = "validator-exit-bot"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "F4ever",email = "raman.s@lido.fi"}
+]
+license = "GPL-3.0"
+readme = "README.md"
+requires-python = ">=3.13,<4"
+dependencies = [
+    "eth-ape (==0.8.37)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
