@@ -2,7 +2,7 @@
 # Usage:
 #   ape run generate --kapi-url ... --cl-url ... --vi 1234 --vi 1235
 #   or
-#   poetry run python scripts/generate.py generate --kapi-url ... --cl-url ... --vi 1234 --vi 1235
+#   poetry run python -m scripts.generate_veb_data_reveal generate --kapi-url ... --cl-url ... --vi 1234 --vi 1235
 
 import sys
 
@@ -27,5 +27,5 @@ def cli(kapi_url, cl_url, vi):
 
 
 if __name__ == "__main__":
-    sys.argv = ['ape', 'run', 'generate', *sys.argv[1:]]
+    sys.argv = ['ape', 'run', 'generate_veb_data_reveal', *sys.argv[1:]]
     ape_cli()

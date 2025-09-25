@@ -16,7 +16,8 @@ class ValidatorExitData:
     exit_requests: list[Key]
 
     def __init__(self, exit_requests: list[Key]):
-        self.exit_requests = exit_requests
+        # Sort all requests by module ID, node operator ID, and validator index (VEB requirements)
+        self.exit_requests = sorted(exit_requests, key=lambda x: (x.module_id, x.no_id, x.validator_index))
 
     @classmethod
     def from_et_calldata(cls, calldata: HexStr) -> "ValidatorExitData":
@@ -83,11 +84,11 @@ class ValidatorExitData:
         """
         return HexStr(encode(
             ['(uint256,uint256,uint64,bytes,uint256)[]'],
-            [((
+            [[(
                 req.module_id,
                 req.no_id,
                 req.validator_index,
                 HexBytes(req.validator_pub_key),
                 req.pub_key_index,
-            ) for req in self.exit_requests)]
-        ))
+            ) for req in self.exit_requests]]
+        ).hex())
