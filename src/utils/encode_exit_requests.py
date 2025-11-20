@@ -3,7 +3,7 @@ from eth_typing import HexStr
 from hexbytes import HexBytes
 from web3 import Web3
 
-from utils.types import Key
+from src.utils.types import Key
 
 
 class ValidatorExitData:

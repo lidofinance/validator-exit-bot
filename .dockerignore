@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# Tests
+tests/
+test_*.py
+*_test.py
+.pytest_cache/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Poetry
+poetry.lock
+pyproject.toml
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+*.local
+env.example
+
+# Misc
+.DS_Store
+*.bak
+*.tmp
+Makefile
+

@@ -2,9 +2,9 @@ from functools import lru_cache
 from urllib.parse import urljoin
 
 import requests
-from eth_typing import ChecksumAddress, HexStr
+from eth_typing import ChecksumAddress
 
-from utils.types import Key, KapiKey
+from src.utils.types import KapiKey
 
 
 class KeysAPIClient:
