@@ -19,9 +19,3 @@ class KapiKey:
     no_id: int
     validator_pub_key: HexStr
     pub_key_index: int
-
-
-@dataclass
-class CLValidator:
-    index: int
-    pubkey: HexStr

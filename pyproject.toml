@@ -13,6 +13,7 @@ prometheus-client = "0.21.1"
 web3-multi-provider = { version = "^2.2.0", extras = ["metrics"] }
 web3 = "^7.0.0"
 structlog = "^24.1.0"
+click = "^8.1.8"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

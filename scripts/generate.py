@@ -83,11 +83,10 @@ if str(parent_dir) not in sys.path:
 
 import click
 
+from scripts.exit_request import build_exit_request
+from scripts.kapi_client import KeysAPIClient
+from scripts.encode_exit_requests import ValidatorExitData
 from src.utils.cl_client import CLClient
-from src.utils.encode_exit_requests import ValidatorExitData
-from src.utils.exit_request import build_exit_request
-from src.utils.kapi_client import KeysAPIClient
-
 
 class AppContext:
     """

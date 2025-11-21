@@ -1,5 +1,5 @@
+from scripts.kapi_client import KeysAPIClient
 from src.utils.cl_client import CLClient
-from src.utils.kapi_client import KeysAPIClient
 from src.utils.types import Key
 
 
