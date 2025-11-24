@@ -18,3 +18,8 @@ class LidoLocatorContract(ContractInterface):
         response = self.functions.stakingRouter().call(block_identifier=block_identifier)
         logger.info({'msg': 'Call `stakingRouter()`.', 'value': response, 'block_identifier': repr(block_identifier)})
         return response
+
+    def withdrawal_vault(self, block_identifier: BlockIdentifier = 'latest') -> ChecksumAddress:
+        response = self.functions.withdrawalVault().call(block_identifier=block_identifier)
+        logger.info({'msg': 'Call `withdrawalVault()`.', 'value': response, 'block_identifier': repr(block_identifier)})
+        return response

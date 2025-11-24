@@ -396,10 +396,9 @@ class TriggerExitBot:
         validators_to_trigger: list[dict[str, Any]]
     ):
         """
-        Build and send trigger_exits transaction(s).
+        Build and send trigger_exits transaction.
         
-        Groups validators by node operator and sends separate transactions for each,
-        using the node operator's reward address as the refund recipient.
+        Uses the bot's account address as the refund recipient.
         
         Args:
             data_key: Hex string of the exit requests data
@@ -409,89 +408,36 @@ class TriggerExitBot:
         # Convert data_key back to bytes
         exits_data = bytes.fromhex(data_key)
         
-        # Group validators by (moduleId, nodeOpId)
-        validators_by_operator: dict[tuple[int, int], list[dict[str, Any]]] = {}
+        # Get exit data indexes from validators
+        exit_data_indexes = [v['index'] for v in validators_to_trigger]
         
-        for validator in validators_to_trigger:
-            key = (validator['moduleId'], validator['nodeOpId'])
-            if key not in validators_by_operator:
-                validators_by_operator[key] = []
-            validators_by_operator[key].append(validator)
+        # Use bot's account address as refund recipient
+        # If account is not configured, use zero address as placeholder
+        refund_recipient = (
+            variables.ACCOUNT.address 
+            if variables.ACCOUNT 
+            else self.w3.to_checksum_address('0x0000000000000000000000000000000000000000')
+        )
         
-        logger.info({
-            'msg': 'Grouped validators by node operator',
-            'total_validators': len(validators_to_trigger),
-            'node_operators_count': len(validators_by_operator)
-        })
-        
-        # Process each node operator group separately
-        for (module_id, node_op_id), validators in validators_by_operator.items():
-            self._trigger_exits_for_node_operator(
-                exits_data,
-                data_format,
-                module_id,
-                node_op_id,
-                validators
-            )
-
-    def _trigger_exits_for_node_operator(
-        self,
-        exits_data: bytes,
-        data_format: int,
-        module_id: int,
-        node_op_id: int,
-        validators: list[dict[str, Any]]
-    ):
-        """
-        Trigger exits for validators belonging to a specific node operator.
-        
-        Args:
-            exits_data: Packed exit requests data
-            data_format: Data format identifier
-            module_id: Staking module ID
-            node_op_id: Node operator ID
-            validators: List of validators for this node operator
-        """
-        exit_data_indexes = [v['index'] for v in validators]
-        
-        # Get node operator registry for this module
-        node_operator_registry = self.w3.lido.node_operator_registry_map.get(module_id)
-        
-        if node_operator_registry is None:
-            logger.error({
-                'msg': 'Node operator registry not found for module, cannot get refund recipient',
-                'module_id': module_id,
-                'node_op_id': node_op_id,
-                'validators_count': len(validators)
-            })
-            return
-        
-        # Get node operator info to retrieve reward address
+        # Get withdrawal request fee from withdrawal vault
         try:
-            node_operator_info = node_operator_registry.get_node_operator(
-                node_operator_id=node_op_id,
-                full_info=False  # We only need the reward address
-            )
-            refund_recipient = self.w3.to_checksum_address(node_operator_info['rewardAddress'])
+            fee_per_request = self.w3.lido.withdrawal_vault.get_withdrawal_request_fee()
+            total_fee = fee_per_request * len(validators_to_trigger)
         except Exception as error:
             logger.error({
-                'msg': 'Failed to get node operator info, cannot determine refund recipient',
-                'module_id': module_id,
-                'node_op_id': node_op_id,
-                'error': str(error),
-                'validators_count': len(validators)
+                'msg': 'Failed to get withdrawal request fee',
+                'error': str(error)
             })
             return
         
         logger.info({
-            'msg': 'Building trigger_exits transaction for node operator',
-            'module_id': module_id,
-            'node_op_id': node_op_id,
-            'node_operator_name': node_operator_info['name'],
-            'validators_count': len(validators),
+            'msg': 'Building trigger_exits transaction',
+            'validators_count': len(validators_to_trigger),
             'exit_data_indexes': exit_data_indexes,
             'data_format': data_format,
-            'refund_recipient': refund_recipient
+            'refund_recipient': refund_recipient,
+            'fee_per_request': fee_per_request,
+            'total_fee': total_fee
         })
         
         try:
@@ -500,45 +446,38 @@ class TriggerExitBot:
                 exits_data=exits_data,
                 data_format=data_format,
                 exit_data_indexes=exit_data_indexes,
-                refund_recipient=refund_recipient,
-                value=0
+                refund_recipient=refund_recipient
             )
             
             # Check transaction locally first
-            if not self.w3.transaction.check(tx_function):
+            if not self.w3.transaction.check(tx_function, value=total_fee):
                 logger.error({
                     'msg': 'Transaction check failed, not sending',
-                    'module_id': module_id,
-                    'node_op_id': node_op_id
+                    'validators_count': len(validators_to_trigger)
                 })
                 return
             
             # Send transaction
             success = self.w3.transaction.send(
                 tx_function, 
-                timeout_in_blocks=10
+                timeout_in_blocks=10,
+                value=total_fee
             )
             
             if success:
                 logger.info({
-                    'msg': 'Successfully triggered exits for node operator',
-                    'module_id': module_id,
-                    'node_op_id': node_op_id,
-                    'validators_count': len(validators)
+                    'msg': 'Successfully triggered exits',
+                    'validators_count': len(validators_to_trigger)
                 })
             else:
                 logger.warning({
-                    'msg': 'Failed to trigger exits for node operator',
-                    'module_id': module_id,
-                    'node_op_id': node_op_id,
-                    'validators_count': len(validators)
+                    'msg': 'Failed to trigger exits',
+                    'validators_count': len(validators_to_trigger)
                 })
                 
         except Exception as error:
             logger.error({
-                'msg': 'Exception while triggering exits for node operator',
-                'module_id': module_id,
-                'node_op_id': node_op_id,
+                'msg': 'Exception while triggering exits',
                 'error': str(error),
-                'validators_count': len(validators)
+                'validators_count': len(validators_to_trigger)
             })

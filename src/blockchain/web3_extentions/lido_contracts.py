@@ -4,6 +4,7 @@ from typing import cast
 from blockchain.contracts.node_operator_registry import NodeOperatorRegistryContract
 from blockchain.contracts.staking_router import StakingRouterContract
 from blockchain.contracts.validator_exit_bus_oracle import ValidatorExitBusOracleContract
+from blockchain.contracts.withdrawal_vault import WithdrawalVaultContract
 import variables
 from blockchain.contracts.lido_locator import LidoLocatorContract
 from web3 import Web3
@@ -40,6 +41,14 @@ class LidoContracts(Module):
             self.w3.eth.contract(
                 address=self.lido_locator.staking_router(),
                 ContractFactoryClass=StakingRouterContract,
+            ),
+        )
+
+        self.withdrawal_vault: WithdrawalVaultContract = cast(
+            WithdrawalVaultContract,
+            self.w3.eth.contract(
+                address=self.lido_locator.withdrawal_vault(),
+                ContractFactoryClass=WithdrawalVaultContract,
             ),
         )
 

@@ -20,9 +20,12 @@ class TransactionUtils(Module):
     w3: Web3
 
     @staticmethod
-    def check(transaction: ContractFunction) -> bool:
+    def check(transaction: ContractFunction, value: int = 0) -> bool:
         try:
-            transaction.call()
+            call_params = {}
+            if value > 0:
+                call_params['value'] = value
+            transaction.call(call_params)
         except (ValueError, ContractLogicError) as error:
             logger.error({'msg': 'Local transaction reverted.', 'error': str(error)})
             return False
@@ -34,6 +37,7 @@ class TransactionUtils(Module):
         self,
         transaction: ContractFunction,
         timeout_in_blocks: int,
+        value: int = 0,
     ) -> bool:
         if not variables.ACCOUNT:
             logger.info({'msg': 'Account was not provided. Sending transaction skipped.'})
@@ -51,19 +55,20 @@ class TransactionUtils(Module):
             variables.MAX_PRIORITY_FEE,
         )
 
-        gas_limit = self._estimate_gas(transaction, variables.ACCOUNT.address)
+        gas_limit = self._estimate_gas(transaction, variables.ACCOUNT.address, value)
 
-        transaction_dict = transaction.build_transaction(
-            TxParams(
-                {
-                    'from': variables.ACCOUNT.address,
-                    'gas': gas_limit,
-                    'maxFeePerGas': Wei(pending['baseFeePerGas'] * 2 + priority),
-                    'maxPriorityFeePerGas': priority,
-                    'nonce': self.w3.eth.get_transaction_count(variables.ACCOUNT.address),
-                }
-            )
-        )
+        tx_params = {
+            'from': variables.ACCOUNT.address,
+            'gas': gas_limit,
+            'maxFeePerGas': Wei(pending['baseFeePerGas'] * 2 + priority),
+            'maxPriorityFeePerGas': priority,
+            'nonce': self.w3.eth.get_transaction_count(variables.ACCOUNT.address),
+        }
+        
+        if value > 0:
+            tx_params['value'] = Wei(value)
+
+        transaction_dict = transaction.build_transaction(TxParams(tx_params))
 
         signed = self.w3.eth.account.sign_transaction(transaction_dict, variables.ACCOUNT.key())
         status = self.send_and_wait(signed, timeout_in_blocks)
@@ -78,9 +83,12 @@ class TransactionUtils(Module):
         return status
 
     @staticmethod
-    def _estimate_gas(transaction: ContractFunction, account_address: ChecksumAddress) -> int:
+    def _estimate_gas(transaction: ContractFunction, account_address: ChecksumAddress, value: int = 0) -> int:
         try:
-            gas = transaction.estimate_gas({'from': account_address})
+            tx_params = {'from': account_address}
+            if value > 0:
+                tx_params['value'] = value
+            gas = transaction.estimate_gas(tx_params)
         except ContractLogicError as error:
             logger.warning({'msg': 'Can not estimate gas. Contract logic error.', 'error': str(error)})
             return variables.CONTRACT_GAS_LIMIT

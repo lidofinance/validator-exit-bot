@@ -214,8 +214,7 @@ class ValidatorExitBusOracleContract(ContractInterface):
         exits_data: bytes,
         data_format: int,
         exit_data_indexes: list[int],
-        refund_recipient: ChecksumAddress,
-        value: int = 0
+        refund_recipient: ChecksumAddress
     ):
         """
         Trigger exits for validators specified by exit data indexes.
@@ -223,27 +222,31 @@ class ValidatorExitBusOracleContract(ContractInterface):
         This method builds a transaction to trigger validator exits. The actual exit messages
         will be sent to the Consensus Layer for the specified validators.
         
+        Note: This function is payable and requires sending ETH for withdrawal request fees.
+        The value must be passed separately to the transaction.send() method.
+        
         Args:
             exits_data: Packed exit requests data (bytes)
             data_format: Data format identifier (usually 1 for DATA_FORMAT_LIST)
             exit_data_indexes: List of validator indexes to exit from the packed data
             refund_recipient: Address to receive any refund
-            value: Amount of ETH to send with the transaction (in wei)
             
         Returns:
             ContractFunction that can be executed or passed to transaction utilities
             
         Example:
             >>> vebo = w3.lido.validator_exit_bus_oracle
+            >>> withdrawal_vault = w3.lido.withdrawal_vault
+            >>> fee = withdrawal_vault.get_withdrawal_request_fee()
+            >>> total_fee = fee * len(exit_data_indexes)
             >>> tx_function = vebo.trigger_exits(
             ...     exits_data=exit_requests_bytes,
             ...     data_format=1,
             ...     exit_data_indexes=[0, 1, 2],
-            ...     refund_recipient=Web3.to_checksum_address("0x..."),
-            ...     value=0
+            ...     refund_recipient=Web3.to_checksum_address("0x...")
             ... )
-            >>> # Execute transaction
-            >>> w3.transaction.send(tx_function, timeout_in_blocks=10)
+            >>> # Execute transaction with value
+            >>> w3.transaction.send(tx_function, timeout_in_blocks=10, value=total_fee)
         """
         logger.info({
             'msg': 'Preparing triggerExits transaction',
@@ -251,8 +254,7 @@ class ValidatorExitBusOracleContract(ContractInterface):
             'exit_data_indexes_count': len(exit_data_indexes),
             'exit_data_indexes': exit_data_indexes,
             'data_length': len(exits_data),
-            'refund_recipient': refund_recipient,
-            'value': value
+            'refund_recipient': refund_recipient
         })
         
         # Build the exitsData struct according to the ABI
