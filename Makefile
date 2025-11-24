@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell health metrics clean rebuild test
+.PHONY: help build up down restart logs shell health metrics clean rebuild test test-cov test-watch
 
 # Default target
 help:
@@ -19,6 +19,9 @@ help:
 	@echo "  rebuild     Clean rebuild (no cache)"
 	@echo "  config      Validate and view docker-compose config"
 	@echo "  ps          Show running containers"
+	@echo "  test        Run unit tests"
+	@echo "  test-cov    Run tests with coverage report"
+	@echo "  test-watch  Run tests in watch mode"
 
 # Build the Docker image
 build:
@@ -103,4 +106,21 @@ check:
 	@docker --version || echo "❌ Docker not found"
 	@docker-compose --version || echo "❌ docker-compose not found"
 	@echo "✅ All requirements met"
+
+# Run unit tests
+test:
+	@echo "Running unit tests..."
+	poetry run pytest tests/ -v
+
+# Run tests with coverage
+test-cov:
+	@echo "Running tests with coverage..."
+	poetry run pytest tests/ --cov=src --cov-report=term-missing --cov-report=html
+	@echo ""
+	@echo "Coverage report generated in htmlcov/index.html"
+
+# Run tests in watch mode (requires pytest-watch)
+test-watch:
+	@echo "Running tests in watch mode..."
+	poetry run ptw tests/
 

@@ -15,6 +15,13 @@ web3 = "^7.0.0"
 structlog = "^24.1.0"
 click = "^8.1.8"
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-mock = "^3.14.0"
+pytest-cov = "^6.0.0"
+ruff = "^0.8.0"
+pyright = "^1.1.0"
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

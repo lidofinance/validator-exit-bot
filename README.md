@@ -250,6 +250,25 @@ validator-exit-bot/
 
 ### Testing
 
+#### Unit Tests
+
+Run the comprehensive unit test suite for the core bot logic:
+
+```bash
+# Run all tests
+make test
+
+# Run with coverage report
+make test-cov
+
+# Run specific test file
+poetry run pytest tests/test_trigger_exit_bot.py -v
+```
+
+See [tests/README.md](tests/README.md) for detailed testing documentation.
+
+#### Manual Testing with Testnet
+
 ```bash
 # Test with Holesky testnet
 export KAPI_URL=https://keys-api-holesky.testnet.fi
