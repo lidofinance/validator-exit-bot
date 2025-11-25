@@ -1,6 +1,6 @@
 import structlog
 
-from contracts.base_interface import ContractInterface
+from blockchain.contracts.base_interface import ContractInterface
 from web3.types import BlockIdentifier
 
 logger = structlog.get_logger(__name__)

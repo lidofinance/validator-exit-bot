@@ -22,6 +22,8 @@ help:
 	@echo "  test        Run unit tests"
 	@echo "  test-cov    Run tests with coverage report"
 	@echo "  test-watch  Run tests in watch mode"
+	@echo "  run         Run bot locally (loads .env)"
+	@echo "  run-dry     Run bot locally in dry-run mode"
 
 # Build the Docker image
 build:
@@ -123,4 +125,26 @@ test-cov:
 test-watch:
 	@echo "Running tests in watch mode..."
 	poetry run ptw tests/
+
+# Run bot locally (with .env loaded)
+run:
+	@echo "Running bot locally with .env..."
+	@if [ -f .env ]; then \
+		echo "✅ Loading .env file"; \
+		export $$(cat .env | grep -v '^#' | xargs) && poetry run python src/main.py; \
+	else \
+		echo "❌ .env file not found"; \
+		exit 1; \
+	fi
+
+# Run bot locally in dry-run mode
+run-dry:
+	@echo "Running bot in dry-run mode..."
+	@if [ -f .env ]; then \
+		echo "✅ Loading .env file with DRY_RUN=true"; \
+		export $$(cat .env | grep -v '^#' | xargs) && export DRY_RUN=true && poetry run python src/main.py; \
+	else \
+		echo "❌ .env file not found"; \
+		exit 1; \
+	fi
 

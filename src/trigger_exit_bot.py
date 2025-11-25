@@ -3,6 +3,7 @@ from typing import Optional, Any
 from blockchain.typings import Web3
 from web3.types import BlockIdentifier, TxReceipt, TxData
 from utils.cl_client import CLClient
+from utils.exit_data_decoder import decode_all_validators
 import variables
 
 logger = structlog.get_logger(__name__)
@@ -175,12 +176,8 @@ class TriggerExitBot:
             logger.info({'msg': 'No exit requests to process'})
             return
         
-        # Decode all validators from the packed data
-        validators = self.w3.lido.validator_exit_bus_oracle.decode_all_validators(
-            exit_requests_data,
-            data_format,
-            requests_count
-        )
+        # Decode all validators from the packed data (local implementation)
+        validators = decode_all_validators(exit_requests_data, requests_count)
         
         # Store in mapping using hex representation of data as key
         data_key = exit_requests_data.hex() if isinstance(exit_requests_data, bytes) else exit_requests_data
@@ -225,12 +222,8 @@ class TriggerExitBot:
             logger.info({'msg': 'No exit requests to process'})
             return
         
-        # Decode all validators from the packed data
-        validators = self.w3.lido.validator_exit_bus_oracle.decode_all_validators(
-            exit_requests_data,
-            data_format,
-            requests_count
-        )
+        # Decode all validators from the packed data (local implementation)
+        validators = decode_all_validators(exit_requests_data, requests_count)
         
         # Store in mapping using hex representation of data as key
         data_key = exit_requests_data.hex() if isinstance(exit_requests_data, bytes) else exit_requests_data

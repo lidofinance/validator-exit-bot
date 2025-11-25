@@ -1,7 +1,7 @@
 import structlog
 from typing import Any, Optional
 
-from contracts.base_interface import ContractInterface
+from blockchain.contracts.base_interface import ContractInterface
 from eth_typing import ChecksumAddress, HexStr
 from web3.types import BlockIdentifier, EventData, TxData, TxReceipt
 

@@ -1,7 +1,6 @@
 """Unit tests for TriggerExitBot core logic."""
 import pytest
-from unittest.mock import Mock, MagicMock, patch, call
-from typing import Any
+from unittest.mock import Mock, patch
 import sys
 from pathlib import Path
 
@@ -591,8 +590,3 @@ class TestTriggerExitsMainMethod:
             assert mock_check.call_count == 2
             mock_check.assert_any_call('key1')
             mock_check.assert_any_call('key2')
-
-
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
-
