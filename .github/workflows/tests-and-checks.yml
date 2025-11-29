@@ -44,3 +44,23 @@ jobs:
       - name: Unit tests with pytest
         run: |
           poetry run pytest tests
+
+  docker-build:
+    name: Docker build test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: validator-exit-bot:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
