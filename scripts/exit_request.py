@@ -1,6 +1,5 @@
-from scripts.kapi_client import KeysAPIClient
+from scripts.kapi_client import Key, KeysAPIClient
 from src.utils.cl_client import CLClient
-from src.utils.types import Key
 
 
 def build_exit_request(kapi_client: KeysAPIClient, cl_client: CLClient, validator_indexes: list[int]) -> list[Key]:

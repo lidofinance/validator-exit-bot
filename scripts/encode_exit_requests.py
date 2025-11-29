@@ -3,7 +3,7 @@ from eth_typing import HexStr
 from hexbytes import HexBytes
 from web3 import Web3
 
-from src.utils.types import Key
+from scripts.kapi_client import Key
 
 
 class ValidatorExitData:

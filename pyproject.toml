@@ -8,7 +8,7 @@ license = "GPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.13,<4"
+python = ">=3.12,<4"
 prometheus-client = "0.21.1"
 web3-multi-provider = { version = "^2.2.0", extras = ["metrics"] }
 web3 = "^7.0.0"
