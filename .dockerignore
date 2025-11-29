@@ -46,10 +46,6 @@ Dockerfile*
 docker-compose*.yml
 .dockerignore
 
-# Poetry
-poetry.lock
-pyproject.toml
-
 # Logs
 *.log
 logs/
