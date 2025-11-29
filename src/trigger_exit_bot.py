@@ -171,13 +171,7 @@ class TriggerExitBot:
             'data_length': len(exit_requests_data),
             'data_format': data_format,
         })
-        
-        if requests_count == 0:
-            logger.info({'msg': 'No exit requests to process'})
-            return
-        
-        # Decode all validators from the packed data (local implementation)
-        validators = decode_all_validators(exit_requests_data, requests_count)
+        validators = decode_all_validators(exit_requests_data)
         
         # Store in mapping using hex representation of data as key
         data_key = exit_requests_data.hex() if isinstance(exit_requests_data, bytes) else exit_requests_data
@@ -213,17 +207,8 @@ class TriggerExitBot:
             'data_length': len(exit_requests_data)
         })
         
-        # For submitExitRequestsData, we need to determine requests_count
-        # Get it from the processing state
-        processing_state = self.w3.lido.validator_exit_bus_oracle.get_processing_state()
-        requests_count = processing_state['requestsCount']
-        
-        if requests_count == 0:
-            logger.info({'msg': 'No exit requests to process'})
-            return
-        
-        # Decode all validators from the packed data (local implementation)
-        validators = decode_all_validators(exit_requests_data, requests_count)
+        # Decode all validators from the packed data
+        validators = decode_all_validators(exit_requests_data)
         
         # Store in mapping using hex representation of data as key
         data_key = exit_requests_data.hex() if isinstance(exit_requests_data, bytes) else exit_requests_data

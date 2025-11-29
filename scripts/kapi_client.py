@@ -1,10 +1,26 @@
+from dataclasses import dataclass
 from functools import lru_cache
 from urllib.parse import urljoin
 
 import requests
-from eth_typing import ChecksumAddress
+from eth_typing import ChecksumAddress, HexStr
 
-from src.utils.types import KapiKey
+@dataclass
+class Key:
+    """Exit request input structure"""
+    module_id: int
+    no_id: int
+    validator_index: int
+    validator_pub_key: HexStr
+    pub_key_index: int
+
+
+@dataclass
+class KapiKey:
+    module_id: int
+    no_id: int
+    validator_pub_key: HexStr
+    pub_key_index: int
 
 
 class KeysAPIClient:

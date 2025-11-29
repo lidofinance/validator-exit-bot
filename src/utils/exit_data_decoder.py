@@ -75,7 +75,7 @@ def unpack_exit_request(exit_data: bytes, index: int) -> Dict[str, Any]:
     }
 
 
-def decode_all_validators(exit_data: bytes, requests_count: int) -> List[Dict[str, Any]]:
+def decode_all_validators(exit_data: bytes) -> List[Dict[str, Any]]:
     """
     Decode all validators from packed exit data using local Python implementation.
     
@@ -84,7 +84,6 @@ def decode_all_validators(exit_data: bytes, requests_count: int) -> List[Dict[st
     
     Args:
         exit_data: Packed exit requests data
-        requests_count: Number of validators in the data
         
     Returns:
         List of validator dictionaries, each containing:
@@ -97,15 +96,8 @@ def decode_all_validators(exit_data: bytes, requests_count: int) -> List[Dict[st
     Raises:
         ValueError: If unable to unpack a validator or if data is invalid
     """
+    requests_count = calculate_requests_count(exit_data)
     validators = []
-    
-    # Validate that we have enough data
-    expected_length = requests_count * PACKED_REQUEST_LENGTH
-    if len(exit_data) < expected_length:
-        raise ValueError(
-            f"Exit data too short: expected at least {expected_length} bytes for "
-            f"{requests_count} validators, got {len(exit_data)} bytes"
-        )
     
     for i in range(requests_count):
         try:

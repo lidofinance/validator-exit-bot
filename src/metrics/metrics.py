@@ -19,90 +19,15 @@ MODULE_TX_SEND = Counter(
     ['status', 'module_id'],
 )
 
-DEPOSIT_MESSAGES = Gauge(
-    'deposit_messages',
-    'Guardians deposit messages',
-    ['address', 'module_id', 'version', 'transport', 'chain_id'],
-)
-PAUSE_MESSAGES = Gauge(
-    'pause_messages',
-    'Guardians pause messages',
-    ['address', 'module_id', 'version', 'transport', 'chain_id'],
-)
-PING_MESSAGES = Gauge(
-    'ping_messages',
-    'Guardians ping messages',
-    ['address', 'version', 'transport', 'chain_id'],
-)
-UNVET_MESSAGES = Gauge(
-    'unvet_messages',
-    'Guardian unvet messages',
-    ['address', 'module_id', 'version', 'transport', 'chain_id'],
-)
-
-CURRENT_QUORUM_SIZE = Gauge(
-    'quorum_size',
-    'Current quorum size',
-    ['type'],
-)
-
-DEPOSITABLE_ETHER = Gauge(
-    'depositable_ether',
-    'Depositable Ether',
-)
-
-POSSIBLE_DEPOSITS_AMOUNT = Gauge(
-    'possible_deposits_amount',
-    'Possible deposits amount.',
-    ['module_id'],
-)
-
-IS_DEPOSITABLE = Gauge(
-    'is_depositable',
-    'Represents is_depositable check.',
-    ['module_id'],
-)
-
-QUORUM = Gauge(
-    'quorum',
-    'Represents if quorum could be collected.',
-    ['module_id'],
-)
-
-CAN_DEPOSIT = Gauge(
-    'can_deposit',
-    'Represents can_deposit check.',
-    ['module_id'],
-)
-
-GAS_OK = Gauge(
-    'is_gas_ok',
-    'Represents is_gas_ok check.',
-    ['module_id'],
-)
-
-DEPOSIT_AMOUNT_OK = Gauge(
-    'is_deposit_amount_ok',
-    'Represents is_deposit_amount_ok check.',
-    ['module_id'],
-)
-
 UNEXPECTED_EXCEPTIONS = Counter(
     'unexpected_exceptions',
     'Total count of unexpected exceptions',
     ['type'],
 )
 
-# TODO unify ACCOUNT_BALANCE and GUARDIAN_BALANCE
 ACCOUNT_BALANCE = Gauge(
     'account_balance',
     'Account balance',
-    ['address', 'chain_id'],
-)
-
-GUARDIAN_BALANCE = Gauge(
-    'guardian_balance',
-    'Balance of the guardian',
     ['address', 'chain_id'],
 )
 
