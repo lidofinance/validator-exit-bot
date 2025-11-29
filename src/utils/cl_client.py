@@ -2,7 +2,7 @@ from urllib.parse import urljoin
 from typing import Optional
 
 import requests
-from eth_pydantic_types.hex.str import HexStr
+from eth_typing import HexStr
 
 
 class CLClient:
