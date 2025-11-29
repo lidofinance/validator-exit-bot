@@ -61,6 +61,4 @@ jobs:
           context: .
           push: false
           tags: validator-exit-bot:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           load: true
