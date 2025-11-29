@@ -44,7 +44,7 @@ RUN poetry install --only main --no-root --no-directory
 FROM base as production
 
 # Copy only the virtual environment from builder
-COPY --from=builder $VENV_PATH $VENV_PATH
+COPY --from=builder /build/.venv $VENV_PATH
 
 WORKDIR /app
 
