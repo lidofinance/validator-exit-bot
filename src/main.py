@@ -1,5 +1,7 @@
 import logging
 import time
+from metrics import metrics
+from metrics.metrics import UNEXPECTED_EXCEPTIONS
 import structlog
 import web3_multi_provider
 from pathlib import Path
@@ -16,7 +18,7 @@ from health_server import start_health_server
 from prometheus_client import start_http_server
 from trigger_exit_bot import TriggerExitBot
 from utils.cl_client import CLClient
-from variables import SERVER_PORT, LOG_LEVEL, PROMETHEUS_PORT, WEB3_RPC_ENDPOINTS, CL_RPC_ENDPOINTS, SLEEP_INTERVAL_SECONDS, LOOKBACK_DAYS
+from variables import SERVER_PORT, LOG_LEVEL, PROMETHEUS_PORT, WEB3_RPC_ENDPOINTS, CL_RPC_ENDPOINTS, SLEEP_INTERVAL_SECONDS, LOOKBACK_DAYS, ACCOUNT
 from blockchain.constants import SLOT_TIME
 from web3_multi_provider import FallbackProvider
 
@@ -72,6 +74,9 @@ def main():
     
     try:
         while True:
+            if ACCOUNT:
+                balance = w3.eth.get_balance(ACCOUNT.address)
+                metrics.ACCOUNT_BALANCE.labels(ACCOUNT.address, w3.eth.chain_id).set(balance)
             logger.info({'msg': 'Running bot cycle'})
             # Always use 'finalized' as to_block
             finalized_block = w3.eth.get_block('finalized')['number']
@@ -98,17 +103,28 @@ def main():
                     'from_block': from_block
                 })
             # Fetch and process ExitDataProcessing events
-            events = bot.trigger_exits(from_block=from_block, to_block=finalized_block)
-            last_processed_block = finalized_block
+            try:
+                events = bot.trigger_exits(from_block=from_block, to_block=finalized_block)
+                last_processed_block = finalized_block
             
-            logger.info({
-                'msg': 'Bot cycle completed', 
-                'events_processed': len(events),
-                'from_block': from_block,
-                'to_block': finalized_block,
-                'last_processed_block': last_processed_block,
-                'sleeping_for_seconds': SLEEP_INTERVAL_SECONDS
-            })
+                logger.info({
+                    'msg': 'Bot cycle completed', 
+                    'events_processed': len(events),
+                    'from_block': from_block,
+                    'to_block': finalized_block,
+                    'last_processed_block': last_processed_block,
+                    'sleeping_for_seconds': SLEEP_INTERVAL_SECONDS
+                })
+            except Exception as e:
+                error_type = type(e).__name__
+                UNEXPECTED_EXCEPTIONS.labels(type=error_type).inc()
+                logger.error({
+                    'msg': 'Error triggering exits',
+                    'error': str(e),
+                    'error_type': error_type,
+                    'from_block': from_block,
+                    'to_block': finalized_block
+                }, exc_info=True)
             time.sleep(SLEEP_INTERVAL_SECONDS)
     except KeyboardInterrupt:
         logger.info({'msg': 'Shutting down bot...'})

@@ -35,11 +35,18 @@ class ValidatorExitBusOracleContract(ContractInterface):
         
         Returns None if decoding fails.
         """
-        # Get the function signature for submitReportData
-        func = self.functions.submitReportData
-        decoded = func.decode_function_input(input_data)
-        logger.info({'msg': 'Successfully decoded as submitReportData'})
-        return decoded[1]  # Return the function arguments dict
+        try:
+            func = self.functions.submitReportData
+            decoded = func.decode_function_input(input_data)
+            logger.info({'msg': 'Successfully decoded as submitReportData'})
+            return decoded[1]  # Return the function arguments dict
+        except Exception as e:
+            logger.warning({
+                'msg': 'Failed to decode as submitReportData',
+                'error': str(e),
+                'error_type': type(e).__name__
+            })
+            return None
 
     def decode_submit_exit_requests_data(self, input_data: HexStr) -> Optional[dict[str, Any]]:
         """
@@ -47,11 +54,18 @@ class ValidatorExitBusOracleContract(ContractInterface):
         
         Returns None if decoding fails.
         """
-        # Get the function signature for submitExitRequestsData
-        func = self.functions.submitExitRequestsData
-        decoded = func.decode_function_input(input_data)
-        logger.info({'msg': 'Successfully decoded as submitExitRequestsData'})
-        return decoded[1]  # Return the function arguments dict
+        try:
+            func = self.functions.submitExitRequestsData
+            decoded = func.decode_function_input(input_data)
+            logger.info({'msg': 'Successfully decoded as submitExitRequestsData'})
+            return decoded[1]  # Return the function arguments dict
+        except Exception as e:
+            logger.warning({
+                'msg': 'Failed to decode as submitExitRequestsData',
+                'error': str(e),
+                'error_type': type(e).__name__
+            })
+            return None
 
     def trigger_exits(
         self,

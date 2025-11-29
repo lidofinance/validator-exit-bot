@@ -1,5 +1,9 @@
+from ctypes import cast
+from blockchain.contracts.validator_exit_bus_oracle import ValidatorExitBusOracleContract
+from blockchain.web3_extentions.transaction import TransactionUtils
 import structlog
 from typing import Optional, Any
+from hashlib import sha256
 from blockchain.typings import Web3
 from web3.types import BlockIdentifier, TxReceipt, TxData
 from utils.cl_client import CLClient
@@ -13,11 +17,30 @@ class TriggerExitBot:
     def __init__(self, w3: Web3, cl_client: CLClient):
         self.w3 = w3
         self.cl_client = cl_client
-        # Store mapping of exit_requests_data -> list of validators
-        # Key is hex string of the data, value is list of validator dicts
+        # Store mapping of exit_requests_data hash -> list of validators
+        # Key is SHA256 hash of the data, value is list of validator dicts
         self.validators_map: dict[str, list[dict[str, Any]]] = {}
-        # Store mapping of exit_requests_data -> data_format
+        # Store mapping of exit_requests_data hash -> data_format
         self.data_format_map: dict[str, int] = {}
+        # Store mapping of hash -> original bytes data (for transaction building)
+        self.data_bytes_map: dict[str, bytes] = {}
+        self.vebo = cast(self.w3.lido.validator_exit_bus_oracle, ValidatorExitBusOracleContract)
+        self.transaction_utils = cast(self.w3.transaction, TransactionUtils)
+    
+    def _get_data_key(self, data: bytes | str) -> str:
+        """
+        Generate a consistent hash key for exit requests data.
+        
+        Args:
+            data: Either bytes or hex string of the data
+            
+        Returns:
+            SHA256 hash as hex string (64 characters instead of potentially thousands)
+        """
+        if isinstance(data, str):
+            # If it's already a hex string, convert to bytes first
+            data = bytes.fromhex(data)
+        return sha256(data).hexdigest()
 
     def _get_transaction_data(self, tx_hash: str) -> tuple[Optional[TxData], Optional[TxReceipt]]:
         """
@@ -26,17 +49,9 @@ class TriggerExitBot:
         Returns:
             Tuple of (transaction_data, transaction_receipt) or (None, None) if failed
         """
-        try:
-            tx = self.w3.eth.get_transaction(tx_hash)
-            tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
-            return tx, tx_receipt
-        except Exception as error:
-            logger.error({
-                'msg': 'Failed to get transaction data',
-                'tx_hash': tx_hash,
-                'error': str(error)
-            })
-            return None, None
+        tx = self.w3.eth.get_transaction(tx_hash)
+        tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
+        return tx, tx_receipt
 
     def _decode_transaction_input(self, input_data: str) -> tuple[Optional[str], Optional[dict[str, Any]]]:
         """
@@ -47,15 +62,13 @@ class TriggerExitBot:
         Returns:
             Tuple of (function_name, decoded_data) or (None, None) if both fail
         """
-        vebo = self.w3.lido.validator_exit_bus_oracle
-        
         # Try to decode as submitReportData first
-        decoded = vebo.decode_submit_report_data(input_data)
+        decoded = self.vebo.decode_submit_report_data(input_data)
         if decoded is not None:
             return 'submitReportData', decoded
         
         # If that fails, try to decode as submitExitRequestsData
-        decoded = vebo.decode_submit_exit_requests_data(input_data)
+        decoded = self.vebo.decode_submit_exit_requests_data(input_data)
         if decoded is not None:
             return 'submitExitRequestsData', decoded
         
@@ -83,7 +96,7 @@ class TriggerExitBot:
         })
         
         # Fetch ExitDataProcessing events from VEBO
-        events = self.w3.lido.validator_exit_bus_oracle.get_exit_data_processing_events(
+        events = self.vebo.get_exit_data_processing_events(
             from_block=from_block,
             to_block=to_block
         )
@@ -106,15 +119,10 @@ class TriggerExitBot:
                 'transaction_hash': transaction_hash
             })
             
-            # Get transaction data and receipt
             tx_data, tx_receipt = self._get_transaction_data(transaction_hash)
             
             if tx_data is None or tx_receipt is None:
-                logger.warning({
-                    'msg': 'Skipping event due to missing transaction data',
-                    'transaction_hash': transaction_hash
-                })
-                continue
+                raise ValueError('Could not get transaction data')
             
             # Check if transaction was successful
             if tx_receipt['status'] != 1:
@@ -134,11 +142,7 @@ class TriggerExitBot:
             function_name, decoded_data = self._decode_transaction_input(tx_data['input'])
             
             if function_name is None:
-                logger.warning({
-                    'msg': 'Could not decode transaction input',
-                    'transaction_hash': transaction_hash
-                })
-                continue
+                raise ValueError('Could not decode transaction input')
             
             if function_name == 'submitReportData':
                 self._process_submit_report_data(decoded_data)
@@ -173,14 +177,15 @@ class TriggerExitBot:
         })
         validators = decode_all_validators(exit_requests_data)
         
-        # Store in mapping using hex representation of data as key
-        data_key = exit_requests_data.hex() if isinstance(exit_requests_data, bytes) else exit_requests_data
+        # Generate hash key for efficient storage
+        data_key = self._get_data_key(exit_requests_data)
         self.validators_map[data_key] = validators
         self.data_format_map[data_key] = data_format
+        self.data_bytes_map[data_key] = exit_requests_data if isinstance(exit_requests_data, bytes) else bytes.fromhex(exit_requests_data)
         
         logger.info({
             'msg': 'Stored validators mapping for submitReportData',
-            'data_key_length': len(data_key),
+            'data_hash': data_key,
             'validators_count': len(validators)
         })
         
@@ -210,14 +215,15 @@ class TriggerExitBot:
         # Decode all validators from the packed data
         validators = decode_all_validators(exit_requests_data)
         
-        # Store in mapping using hex representation of data as key
-        data_key = exit_requests_data.hex() if isinstance(exit_requests_data, bytes) else exit_requests_data
+        # Generate hash key for efficient storage
+        data_key = self._get_data_key(exit_requests_data)
         self.validators_map[data_key] = validators
         self.data_format_map[data_key] = data_format
+        self.data_bytes_map[data_key] = exit_requests_data if isinstance(exit_requests_data, bytes) else bytes.fromhex(exit_requests_data)
         
         logger.info({
             'msg': 'Stored validators mapping for submitExitRequestsData',
-            'data_key_length': len(data_key),
+            'data_hash': data_key,
             'validators_count': len(validators)
         })
         
@@ -242,7 +248,7 @@ class TriggerExitBot:
         Returns:
             List of validator dictionaries or None if not found
         """
-        data_key = exit_requests_data.hex() if isinstance(exit_requests_data, bytes) else exit_requests_data
+        data_key = self._get_data_key(exit_requests_data)
         return self.validators_map.get(data_key)
 
     def _check_and_trigger_exits(self, data_key: str):
@@ -255,6 +261,9 @@ class TriggerExitBot:
         3. If not exited, checks if it was reported using the node operator registry
         4. If reported and not exited, adds it to the list to trigger
         5. Calls trigger_exits transaction with the list
+        
+        Args:
+            data_key: SHA256 hash of the exit requests data
         """
         validators = self.validators_map.get(data_key)
         data_format = self.data_format_map.get(data_key)
@@ -262,7 +271,7 @@ class TriggerExitBot:
         if not validators or data_format is None:
             logger.warning({
                 'msg': 'No validators or data_format found for data_key',
-                'data_key_length': len(data_key)
+                'data_hash': data_key
             })
             return
         
@@ -324,17 +333,7 @@ class TriggerExitBot:
                 })
                 continue
             
-            # Check if validator exiting key was reported
-            try:
-                is_reported = node_operator_registry.is_validator_exiting_key_reported(pubkey_hex)
-            except Exception as error:
-                logger.error({
-                    'msg': 'Failed to check if validator exiting key was reported',
-                    'pubkey': pubkey_hex[:20] + '...',
-                    'error': str(error),
-                    'validator_index': validator_index
-                })
-                continue
+            is_reported = node_operator_registry.is_validator_exiting_key_reported(pubkey_hex)
             
             if is_reported:
                 logger.info({
@@ -379,12 +378,15 @@ class TriggerExitBot:
         Uses the bot's account address as the refund recipient.
         
         Args:
-            data_key: Hex string of the exit requests data
+            data_key: SHA256 hash of the exit requests data
             data_format: Data format identifier
             validators_to_trigger: List of validator dicts to trigger exits for
         """
-        # Convert data_key back to bytes
-        exits_data = bytes.fromhex(data_key)
+        # Get original bytes data from the hash key
+        exits_data = self.data_bytes_map.get(data_key)
+        
+        if exits_data is None:
+            raise ValueError(f'Original exit data not found for hash key {data_key}')
         
         # Get exit data indexes from validators
         exit_data_indexes = [v['index'] for v in validators_to_trigger]
@@ -398,15 +400,8 @@ class TriggerExitBot:
         )
         
         # Get withdrawal request fee from withdrawal vault
-        try:
-            fee_per_request = self.w3.lido.withdrawal_vault.get_withdrawal_request_fee()
-            total_fee = fee_per_request * len(validators_to_trigger)
-        except Exception as error:
-            logger.error({
-                'msg': 'Failed to get withdrawal request fee',
-                'error': str(error)
-            })
-            return
+        fee_per_request = self.w3.lido.withdrawal_vault.get_withdrawal_request_fee()
+        total_fee = fee_per_request * len(validators_to_trigger)
         
         logger.info({
             'msg': 'Building trigger_exits transaction',
@@ -418,44 +413,37 @@ class TriggerExitBot:
             'total_fee': total_fee
         })
         
-        try:
-            # Build the transaction
-            tx_function = self.w3.lido.validator_exit_bus_oracle.trigger_exits(
-                exits_data=exits_data,
-                data_format=data_format,
-                exit_data_indexes=exit_data_indexes,
-                refund_recipient=refund_recipient
-            )
+        # Build the transaction
+        tx_function = self.vebo.trigger_exits(
+            exits_data=exits_data,
+            data_format=data_format,
+            exit_data_indexes=exit_data_indexes,
+            refund_recipient=refund_recipient
+        )
             
-            # Check transaction locally first
-            if not self.w3.transaction.check(tx_function, value=total_fee):
-                logger.error({
-                    'msg': 'Transaction check failed, not sending',
-                    'validators_count': len(validators_to_trigger)
-                })
-                return
-            
-            # Send transaction
-            success = self.w3.transaction.send(
-                tx_function, 
-                timeout_in_blocks=10,
-                value=total_fee
-            )
-            
-            if success:
-                logger.info({
-                    'msg': 'Successfully triggered exits',
-                    'validators_count': len(validators_to_trigger)
-                })
-            else:
-                logger.warning({
-                    'msg': 'Failed to trigger exits',
-                    'validators_count': len(validators_to_trigger)
-                })
-                
-        except Exception as error:
+        # Check transaction locally first
+        if not self.transaction_utils.check(tx_function, value=total_fee):
             logger.error({
-                'msg': 'Exception while triggering exits',
-                'error': str(error),
+                'msg': 'Transaction check failed, not sending',
                 'validators_count': len(validators_to_trigger)
             })
+            return
+            
+        # Send transaction
+        success = self.transaction_utils.send(
+            tx_function, 
+            timeout_in_blocks=10,
+            value=total_fee
+        )
+            
+        if success:
+            logger.info({
+                'msg': 'Successfully triggered exits',
+                'validators_count': len(validators_to_trigger)
+            })
+        else:
+            logger.warning({
+                'msg': 'Failed to trigger exits',
+                'validators_count': len(validators_to_trigger)
+            })
+                
