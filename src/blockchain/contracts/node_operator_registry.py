@@ -11,7 +11,9 @@ class NodeOperatorRegistryContract(ContractInterface):
     abi_path = './interfaces/NodeOperatorRegistry.json'
 
     def is_validator_exiting_key_reported(self, pubkey: HexStr, block_identifier: BlockIdentifier = 'latest') -> bool:
-        response = self.functions.isValidatorExitingKeyReported(pubkey).call(block_identifier=block_identifier)
+        # Convert hex string to bytes - remove '0x' prefix if present
+        pubkey_bytes = bytes.fromhex(pubkey.removeprefix('0x'))
+        response = self.functions.isValidatorExitingKeyReported(pubkey_bytes).call(block_identifier=block_identifier)
         logger.info({'msg': 'Call `isValidatorExitingKeyReported()`.', 'value': response, 'block_identifier': repr(block_identifier)})
         return response
 

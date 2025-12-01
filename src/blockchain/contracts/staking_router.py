@@ -12,5 +12,5 @@ class StakingRouterContract(ContractInterface):
     def get_staking_module(self, id: int, block_identifier: BlockIdentifier = 'latest') -> ChecksumAddress:
         response = self.functions.getStakingModule(id).call(block_identifier=block_identifier)
         logger.info({'msg': f'Call `getStakingModule({id})`.', 'value': response, 'block_identifier': repr(block_identifier)})
-        (_, address, _, _, _, _, _, _, _, _, _, _) = response
+        (_, address, _, _, _, _, _, _, _, _, _, _, _) = response
         return address

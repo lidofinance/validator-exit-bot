@@ -1,8 +1,7 @@
-from ctypes import cast
 from blockchain.contracts.validator_exit_bus_oracle import ValidatorExitBusOracleContract
 from blockchain.web3_extentions.transaction import TransactionUtils
 import structlog
-from typing import Optional, Any
+from typing import Optional, Any, cast
 from hashlib import sha256
 from blockchain.typings import Web3
 from web3.types import BlockIdentifier, TxReceipt, TxData
@@ -24,8 +23,8 @@ class TriggerExitBot:
         self.data_format_map: dict[str, int] = {}
         # Store mapping of hash -> original bytes data (for transaction building)
         self.data_bytes_map: dict[str, bytes] = {}
-        self.vebo = cast(self.w3.lido.validator_exit_bus_oracle, ValidatorExitBusOracleContract)
-        self.transaction_utils = cast(self.w3.transaction, TransactionUtils)
+        self.vebo = cast(ValidatorExitBusOracleContract, self.w3.lido.validator_exit_bus_oracle)
+        self.transaction_utils = cast(TransactionUtils, self.w3.transaction)
     
     def _get_data_key(self, data: bytes | str) -> str:
         """

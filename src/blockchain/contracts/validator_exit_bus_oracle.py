@@ -16,11 +16,10 @@ class ValidatorExitBusOracleContract(ContractInterface):
         to_block: BlockIdentifier = 'latest'
     ) -> list[EventData]:
         """Fetch all ExitDataProcessing events within the specified block range."""
-        event_filter = self.events.ExitDataProcessing.create_filter(
-            fromBlock=from_block,
-            toBlock=to_block
+        events = self.events.ExitDataProcessing.get_logs(
+            from_block=from_block,
+            to_block=to_block
         )
-        events = event_filter.get_all_entries()
         logger.info({
             'msg': 'Fetched ExitDataProcessing events',
             'from_block': from_block,
@@ -36,10 +35,11 @@ class ValidatorExitBusOracleContract(ContractInterface):
         Returns None if decoding fails.
         """
         try:
-            func = self.functions.submitReportData
-            decoded = func.decode_function_input(input_data)
-            logger.info({'msg': 'Successfully decoded as submitReportData'})
-            return decoded[1]  # Return the function arguments dict
+            func, params = self.decode_function_input(input_data)
+            if func.fn_name == 'submitReportData':
+                logger.info({'msg': 'Successfully decoded as submitReportData'})
+                return params
+            return None
         except Exception as e:
             logger.warning({
                 'msg': 'Failed to decode as submitReportData',
@@ -55,10 +55,11 @@ class ValidatorExitBusOracleContract(ContractInterface):
         Returns None if decoding fails.
         """
         try:
-            func = self.functions.submitExitRequestsData
-            decoded = func.decode_function_input(input_data)
-            logger.info({'msg': 'Successfully decoded as submitExitRequestsData'})
-            return decoded[1]  # Return the function arguments dict
+            func, params = self.decode_function_input(input_data)
+            if func.fn_name == 'submitExitRequestsData':
+                logger.info({'msg': 'Successfully decoded as submitExitRequestsData'})
+                return params
+            return None
         except Exception as e:
             logger.warning({
                 'msg': 'Failed to decode as submitExitRequestsData',
