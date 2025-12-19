@@ -10,7 +10,6 @@ from blockchain.contracts.withdrawal_vault import WithdrawalVaultContract
 import variables
 from blockchain.contracts.lido_locator import LidoLocatorContract
 from web3 import Web3
-from web3.contract.contract import Contract
 from web3.module import Module
 
 logger = structlog.get_logger(__name__)

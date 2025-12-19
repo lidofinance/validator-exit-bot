@@ -1,13 +1,6 @@
 """Simple unit tests for scripts/generate.py"""
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
-import sys
-from pathlib import Path
-
-# Add scripts to path
-scripts_path = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(scripts_path))
+from unittest.mock import Mock, patch
 
 from scripts.generate import AppContext
 

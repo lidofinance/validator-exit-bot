@@ -74,13 +74,6 @@ The script will fail with an error message if:
 """
 
 import sys
-from pathlib import Path
-
-# Add parent directory to Python path to import utils
-parent_dir = Path(__file__).parent.parent
-if str(parent_dir) not in sys.path:
-    sys.path.insert(0, str(parent_dir))
-
 import click
 
 from scripts.exit_request import build_exit_request

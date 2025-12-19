@@ -14,7 +14,6 @@ web3-multi-provider = { version = "^2.2.0", extras = ["metrics"] }
 web3 = "^7.0.0"
 structlog = "^24.1.0"
 click = "^8.1.8"
-python-dotenv = "^1.0.0"
 eth-typing = "^5.0.0"
 requests = "^2.31.0"
 

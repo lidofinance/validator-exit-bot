@@ -4,7 +4,6 @@ from typing import Optional
 
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
-from eth_typing import URI
 from web3 import Web3
 
 logger = structlog.get_logger(__name__)
