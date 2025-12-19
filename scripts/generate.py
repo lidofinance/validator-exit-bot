@@ -88,23 +88,24 @@ from scripts.kapi_client import KeysAPIClient
 from scripts.encode_exit_requests import ValidatorExitData
 from src.utils.cl_client import CLClient
 
+
 class AppContext:
     """
     Application context shared across CLI commands.
-    
+
     Attributes:
         debug: Enable debug logging
         kapi: Keys API client instance
         cl_client: Consensus Layer client instance
     """
-    
+
     def __init__(self, debug: bool, kapi_url: str, cl_url: str):
         self.debug = debug
         self.kapi = KeysAPIClient(kapi_url)
         self.cl_client = CLClient(cl_url)
         self.log(f"Connected to KAPI: {kapi_url}")
         self.log(f"Connected to CL: {cl_url}")
-    
+
     def log(self, msg: str) -> None:
         """Print debug message if debug mode is enabled."""
         if self.debug:
@@ -116,30 +117,30 @@ class AppContext:
     "--debug",
     is_flag=True,
     default=False,
-    help="Enable debug logging to see detailed execution steps"
+    help="Enable debug logging to see detailed execution steps",
 )
 @click.option(
     "--kapi-url",
     type=str,
     envvar="KAPI_URL",
     default="https://keys-api.lido.fi",
-    help="Keys API URL (default: https://keys-api.lido.fi, or KAPI_URL env var)"
+    help="Keys API URL (default: https://keys-api.lido.fi, or KAPI_URL env var)",
 )
 @click.option(
     "--cl-url",
     type=str,
     envvar="CL_URL",
     default="http://localhost:5052",
-    help="Consensus Layer (Beacon) API URL (default: http://localhost:5052, or CL_URL env var)"
+    help="Consensus Layer (Beacon) API URL (default: http://localhost:5052, or CL_URL env var)",
 )
 @click.pass_context
 def cli(ctx, debug: bool, kapi_url: str, cl_url: str):
     """
     Generate validator exit request calldata for Lido protocol.
-    
+
     This tool helps create properly formatted calldata for validator exits
     through Easy Track governance or Validator Exit Bus contract.
-    
+
     Use 'poetry run python scripts/generate.py COMMAND --help' for command-specific help.
     """
     try:
@@ -156,37 +157,37 @@ def cli(ctx, debug: bool, kapi_url: str, cl_url: str):
     type=int,
     multiple=True,
     required=True,
-    help="Validator index to include in exit request (can be specified multiple times: --vi 123 --vi 456)"
+    help="Validator index to include in exit request (can be specified multiple times: --vi 123 --vi 456)",
 )
 @click.pass_context
 def et_hash(ctx, vi: list[int]):
     """
     Generate Easy Track hash submit calldata.
-    
+
     This command generates ABI-encoded calldata for submitting validator exit
     request hashes via Easy Track governance mechanism.
-    
+
     The output format matches: SubmitExitRequestHashesUtils.ExitRequestInput[] memory
-    
+
     Each request includes:
     - module_id (uint256): Staking module ID
     - operator_id (uint256): Node operator ID
     - validator_index (uint64): Beacon chain validator index
     - validator_pubkey (bytes): 48-byte BLS public key
     - key_index (uint256): Index in operator's key list
-    
+
     Example:
         poetry run python scripts/generate.py et-hash --vi 123456 --vi 123457
-    
+
     Output:
         Hex-encoded ABI calldata suitable for Easy Track submission
     """
     try:
         ctx.obj.log(f"Generating ET hash submit for validators: {vi}")
         ctx.obj.log("Fetching validator data from CL and KAPI...")
-        
+
         keys_to_exit = build_exit_request(ctx.obj.kapi, ctx.obj.cl_client, vi)
-        
+
         ctx.obj.log(f"Built {len(keys_to_exit)} exit requests")
         if ctx.obj.debug:
             for i, key in enumerate(keys_to_exit, 1):
@@ -196,16 +197,18 @@ def et_hash(ctx, vi: list[int]):
                     f"Operator={key.no_id}, "
                     f"KeyIdx={key.pub_key_index}"
                 )
-        
+
         validator_exit_data = ValidatorExitData(keys_to_exit)
         calldata = validator_exit_data.to_et_calldata()
-        
+
         ctx.obj.log("Successfully generated ET calldata")
-        ctx.obj.log(f"Calldata length: {len(calldata)} characters ({len(calldata)//2} bytes)")
-        
+        ctx.obj.log(
+            f"Calldata length: {len(calldata)} characters ({len(calldata)//2} bytes)"
+        )
+
         # Output the result (this is the main output - don't add prefixes)
         click.echo(calldata)
-        
+
     except ValueError as e:
         click.secho(f"Error: {e}", fg="red", err=True)
         sys.exit(1)
@@ -213,6 +216,7 @@ def et_hash(ctx, vi: list[int]):
         click.secho(f"Unexpected error: {e}", fg="red", err=True)
         if ctx.obj.debug:
             import traceback
+
             click.secho(traceback.format_exc(), fg="red", err=True)
         sys.exit(1)
 
@@ -223,41 +227,41 @@ def et_hash(ctx, vi: list[int]):
     type=int,
     multiple=True,
     required=True,
-    help="Validator index to include in exit request (can be specified multiple times: --vi 123 --vi 456)"
+    help="Validator index to include in exit request (can be specified multiple times: --vi 123 --vi 456)",
 )
 @click.pass_context
 def veb_data(ctx, vi: list[int]):
     """
     Generate Validator Exit Bus (VEB) data reveal calldata.
-    
+
     This command generates raw bytes calldata for revealing validator exit
     request data to the Validator Exit Bus contract.
-    
+
     The output format is tightly packed bytes (NO ABI encoding) with structure:
-    
+
     For each validator (64 bytes total):
     - module_id (3 bytes): Staking module ID
-    - operator_id (5 bytes): Node operator ID  
+    - operator_id (5 bytes): Node operator ID
     - validator_index (8 bytes): Beacon chain validator index
     - validator_pubkey (48 bytes): BLS public key
-    
+
     Note: This format does NOT include key_index (unlike ET format)
-    
+
     The data is sorted by (module_id, operator_id, validator_index) as required
     by the VEB contract specification.
-    
+
     Example:
         poetry run python scripts/generate.py veb-data --vi 123456 --vi 123457
-    
+
     Output:
         Hex-encoded raw bytes data suitable for VEB data reveal
     """
     try:
         ctx.obj.log(f"Generating VEB data reveal for validators: {vi}")
         ctx.obj.log("Fetching validator data from CL and KAPI...")
-        
+
         keys_to_exit = build_exit_request(ctx.obj.kapi, ctx.obj.cl_client, vi)
-        
+
         ctx.obj.log(f"Built {len(keys_to_exit)} exit requests")
         if ctx.obj.debug:
             for i, key in enumerate(keys_to_exit, 1):
@@ -266,17 +270,19 @@ def veb_data(ctx, vi: list[int]):
                     f"Module={key.module_id}, "
                     f"Operator={key.no_id}"
                 )
-        
+
         validator_exit_data = ValidatorExitData(keys_to_exit)
         calldata = validator_exit_data.to_veb_calldata()
-        
+
         ctx.obj.log("Successfully generated VEB calldata")
-        ctx.obj.log(f"Calldata length: {len(calldata)} characters ({len(calldata)//2} bytes)")
+        ctx.obj.log(
+            f"Calldata length: {len(calldata)} characters ({len(calldata)//2} bytes)"
+        )
         ctx.obj.log(f"Number of validators: {(len(calldata)//2) // 64}")
-        
+
         # Output the result (this is the main output - don't add prefixes)
         click.echo(calldata)
-        
+
     except ValueError as e:
         click.secho(f"Error: {e}", fg="red", err=True)
         sys.exit(1)
@@ -284,6 +290,7 @@ def veb_data(ctx, vi: list[int]):
         click.secho(f"Unexpected error: {e}", fg="red", err=True)
         if ctx.obj.debug:
             import traceback
+
             click.secho(traceback.format_exc(), fg="red", err=True)
         sys.exit(1)
 

@@ -30,10 +30,6 @@ jobs:
         run: |
           poetry run ruff check --output-format=github .
 
-      - name: Format with Ruff
-        run: |
-          poetry run ruff check --output-format=github .
-
       - name: Typecheck with Pyright
         run: |
           poetry run pyright

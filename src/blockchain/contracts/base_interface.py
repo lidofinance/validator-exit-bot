@@ -14,9 +14,13 @@ class ContractInterface(Contract):
             return json.load(abi_json)
 
     @classmethod
-    def factory(cls, w3: Web3, class_name: Optional[str] = None, **kwargs: Any) -> type['ContractInterface']:
+    def factory(
+        cls, w3: Web3, class_name: Optional[str] = None, **kwargs: Any
+    ) -> type["ContractInterface"]:
         if cls.abi_path is None:
-            raise AttributeError(f'abi_path attribute is missing in {cls.__name__} class')
+            raise AttributeError(
+                f"abi_path attribute is missing in {cls.__name__} class"
+            )
 
-        kwargs['abi'] = cls.load_abi(cls.abi_path)
+        kwargs["abi"] = cls.load_abi(cls.abi_path)
         return super().factory(w3, class_name, **kwargs)

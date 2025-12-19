@@ -2,7 +2,9 @@ from scripts.kapi_client import Key, KeysAPIClient
 from src.utils.cl_client import CLClient
 
 
-def build_exit_request(kapi_client: KeysAPIClient, cl_client: CLClient, validator_indexes: list[int]) -> list[Key]:
+def build_exit_request(
+    kapi_client: KeysAPIClient, cl_client: CLClient, validator_indexes: list[int]
+) -> list[Key]:
     all_validators = cl_client.get_validators_by_indexes()
     keys = kapi_client.get_keys()
 
@@ -16,13 +18,15 @@ def build_exit_request(kapi_client: KeysAPIClient, cl_client: CLClient, validato
 
         for key in keys:
             if pub_key == key.validator_pub_key:
-                result.append(Key(
-                    module_id=key.module_id,
-                    no_id=key.no_id,
-                    validator_index=validator_index,
-                    validator_pub_key=key.validator_pub_key,
-                    pub_key_index=key.pub_key_index,
-                ))
+                result.append(
+                    Key(
+                        module_id=key.module_id,
+                        no_id=key.no_id,
+                        validator_index=validator_index,
+                        validator_pub_key=key.validator_pub_key,
+                        pub_key_index=key.pub_key_index,
+                    )
+                )
                 break
         else:
             raise ValueError(f"Validator pubkey {pub_key} not found in KAPI")

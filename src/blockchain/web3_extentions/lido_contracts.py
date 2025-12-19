@@ -3,7 +3,9 @@ from typing import cast
 
 from blockchain.contracts.node_operator_registry import NodeOperatorRegistryContract
 from blockchain.contracts.staking_router import StakingRouterContract
-from blockchain.contracts.validator_exit_bus_oracle import ValidatorExitBusOracleContract
+from blockchain.contracts.validator_exit_bus_oracle import (
+    ValidatorExitBusOracleContract,
+)
 from blockchain.contracts.withdrawal_vault import WithdrawalVaultContract
 import variables
 from blockchain.contracts.lido_locator import LidoLocatorContract
@@ -60,4 +62,3 @@ class LidoContracts(Module):
                     ContractFactoryClass=NodeOperatorRegistryContract,
                 ),
             )
-            

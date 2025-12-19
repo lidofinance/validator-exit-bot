@@ -8,7 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-env_path = Path(__file__).parent.parent / '.env'
+env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 from blockchain.typings import Web3
@@ -18,7 +18,16 @@ from health_server import start_health_server
 from prometheus_client import start_http_server
 from trigger_exit_bot import TriggerExitBot
 from utils.cl_client import CLClient
-from variables import SERVER_PORT, LOG_LEVEL, PROMETHEUS_PORT, WEB3_RPC_ENDPOINTS, CL_RPC_ENDPOINTS, SLEEP_INTERVAL_SECONDS, LOOKBACK_DAYS, ACCOUNT
+from variables import (
+    SERVER_PORT,
+    LOG_LEVEL,
+    PROMETHEUS_PORT,
+    WEB3_RPC_ENDPOINTS,
+    CL_RPC_ENDPOINTS,
+    SLEEP_INTERVAL_SECONDS,
+    LOOKBACK_DAYS,
+    ACCOUNT,
+)
 from blockchain.constants import SLOT_TIME
 from web3_multi_provider import FallbackProvider
 
@@ -30,7 +39,7 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.dev.set_exc_info,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer()
+        structlog.processors.JSONRenderer(),
     ],
     wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, LOG_LEVEL)),
     context_class=dict,
@@ -40,16 +49,18 @@ structlog.configure(
 
 logger = structlog.get_logger(__name__)
 
+
 def create_web3(endpoints: list[str]) -> Web3:
     w3 = Web3(FallbackProvider(endpoints, cache_allowed_requests=True))
-    logger.info({'msg': 'Current chain_id', 'chain_id': w3.eth.chain_id})
+    logger.info({"msg": "Current chain_id", "chain_id": w3.eth.chain_id})
     w3.attach_modules(
         {
-            'lido': LidoContracts,
-            'transaction': TransactionUtils,
+            "lido": LidoContracts,
+            "transaction": TransactionUtils,
         }
     )
     return w3
+
 
 def create_cl_client(endpoints: list[str]) -> CLClient:
     return CLClient(endpoints[0])
@@ -62,73 +73,88 @@ def main():
     start_http_server(PROMETHEUS_PORT)
     w3 = create_web3(WEB3_RPC_ENDPOINTS)
     cl_client = create_cl_client(CL_RPC_ENDPOINTS)
-    logger.info({'msg': 'Add metrics to web3 requests.'})
+    logger.info({"msg": "Add metrics to web3 requests."})
     web3_multi_provider.init_metrics()
-    
+
     # Initialize TriggerExitBot
     bot = TriggerExitBot(w3, cl_client)
-    logger.info({'msg': 'TriggerExitBot initialized'})
-    
+    logger.info({"msg": "TriggerExitBot initialized"})
+
     # Track last processed block
     last_processed_block = None
-    
+
     try:
         while True:
             if ACCOUNT:
                 balance = w3.eth.get_balance(ACCOUNT.address)
-                metrics.ACCOUNT_BALANCE.labels(ACCOUNT.address, w3.eth.chain_id).set(balance)
-            logger.info({'msg': 'Running bot cycle'})
+                metrics.ACCOUNT_BALANCE.labels(ACCOUNT.address, w3.eth.chain_id).set(
+                    balance
+                )
+            logger.info({"msg": "Running bot cycle"})
             # Always use 'finalized' as to_block
-            finalized_block = w3.eth.get_block('finalized')['number']
-            
+            finalized_block = w3.eth.get_block("finalized").get("number")
+            if finalized_block is None:
+                raise RuntimeError("Finalized block must have a number")
+
             # Determine from_block
             if last_processed_block is None:
                 # Approximate blocks in lookback period (12 seconds per block average)
                 blocks_per_day = 24 * 60 * 60 // SLOT_TIME
                 lookback_blocks = LOOKBACK_DAYS * blocks_per_day
                 from_block = max(0, finalized_block - lookback_blocks)
-                
-                logger.info({
-                    'msg': 'First run - scanning historical events',
-                    'lookback_days': LOOKBACK_DAYS,
-                    'from_block': from_block,
-                    'current_block': finalized_block,
-                    'blocks_to_scan': lookback_blocks
-                })
+
+                logger.info(
+                    {
+                        "msg": "First run - scanning historical events",
+                        "lookback_days": LOOKBACK_DAYS,
+                        "from_block": from_block,
+                        "current_block": finalized_block,
+                        "blocks_to_scan": lookback_blocks,
+                    }
+                )
             else:
                 # Subsequent runs: continue from last processed block
                 from_block = last_processed_block + 1
-                logger.info({
-                    'msg': 'Continuing from last processed block',
-                    'from_block': from_block
-                })
+                logger.info(
+                    {
+                        "msg": "Continuing from last processed block",
+                        "from_block": from_block,
+                    }
+                )
             # Fetch and process ExitDataProcessing events
             try:
-                events = bot.trigger_exits(from_block=from_block, to_block=finalized_block)
+                events = bot.trigger_exits(
+                    from_block=from_block, to_block=finalized_block
+                )
                 last_processed_block = finalized_block
-            
-                logger.info({
-                    'msg': 'Bot cycle completed', 
-                    'events_processed': len(events),
-                    'from_block': from_block,
-                    'to_block': finalized_block,
-                    'last_processed_block': last_processed_block,
-                    'sleeping_for_seconds': SLEEP_INTERVAL_SECONDS
-                })
+
+                logger.info(
+                    {
+                        "msg": "Bot cycle completed",
+                        "events_processed": len(events),
+                        "from_block": from_block,
+                        "to_block": finalized_block,
+                        "last_processed_block": last_processed_block,
+                        "sleeping_for_seconds": SLEEP_INTERVAL_SECONDS,
+                    }
+                )
             except Exception as e:
                 error_type = type(e).__name__
                 UNEXPECTED_EXCEPTIONS.labels(type=error_type).inc()
-                logger.error({
-                    'msg': 'Error triggering exits',
-                    'error': str(e),
-                    'error_type': error_type,
-                    'from_block': from_block,
-                    'to_block': finalized_block
-                }, exc_info=True)
+                logger.error(
+                    {
+                        "msg": "Error triggering exits",
+                        "error": str(e),
+                        "error_type": error_type,
+                        "from_block": from_block,
+                        "to_block": finalized_block,
+                    },
+                    exc_info=True,
+                )
             time.sleep(SLEEP_INTERVAL_SECONDS)
     except KeyboardInterrupt:
-        logger.info({'msg': 'Shutting down bot...'})
+        logger.info({"msg": "Shutting down bot..."})
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
