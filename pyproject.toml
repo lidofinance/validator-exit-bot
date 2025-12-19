@@ -1,17 +1,28 @@
-[project]
+[tool.poetry]
+package-mode = false
 name = "validator-exit-bot"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "F4ever",email = "raman.s@lido.fi"}
-]
+authors = ["F4ever <raman.s@lido.fi>"]
 license = "GPL-3.0"
 readme = "README.md"
-requires-python = ">=3.13,<4"
-dependencies = [
-    "eth-ape (==0.8.37)"
-]
 
+[tool.poetry.dependencies]
+python = ">=3.12,<4"
+prometheus-client = "0.21.1"
+web3-multi-provider = { version = "^2.2.0", extras = ["metrics"] }
+web3 = "^7.0.0"
+structlog = "^24.1.0"
+click = "^8.1.8"
+eth-typing = "^5.0.0"
+requests = "^2.31.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-mock = "^3.14.0"
+pytest-cov = "^6.0.0"
+ruff = "^0.8.0"
+pyright = "^1.1.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
