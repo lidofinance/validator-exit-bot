@@ -4,6 +4,7 @@ from metrics import metrics
 from metrics.metrics import UNEXPECTED_EXCEPTIONS
 import structlog
 import web3_multi_provider
+from web3_multi_provider.metrics import MetricsConfig
 from blockchain.typings import Web3
 from blockchain.web3_extentions.lido_contracts import LidoContracts
 from blockchain.web3_extentions.transaction import TransactionUtils
@@ -68,7 +69,7 @@ def main():
     
     logger.info({"msg": "Initializing metrics for web3 requests.", "namespace": PROMETHEUS_PREFIX})
     web3_multi_provider.init_metrics(
-        web3_multi_provider.MetricsConfig(namespace=PROMETHEUS_PREFIX)
+        MetricsConfig(namespace=PROMETHEUS_PREFIX)
     )
     
     w3 = create_web3(WEB3_RPC_ENDPOINTS)
