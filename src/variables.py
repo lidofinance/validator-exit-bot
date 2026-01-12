@@ -55,6 +55,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 # Metrics
 PROMETHEUS_PORT = int(os.getenv("PROMETHEUS_PORT", "9000"))
+PROMETHEUS_PREFIX = os.getenv("PROMETHEUS_PREFIX", "validator_exit_bot")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "9010"))
 
 # List of ids of staking modules in which the depositor bot will make deposits
@@ -88,6 +89,7 @@ PUBLIC_ENV_VARS = {
     "MAX_BUFFERED_ETHERS": MAX_BUFFERED_ETHERS,
     "LOG_LEVEL": LOG_LEVEL,
     "PROMETHEUS_PORT": PROMETHEUS_PORT,
+    "PROMETHEUS_PREFIX": PROMETHEUS_PREFIX,
     "SERVER_PORT": SERVER_PORT,
     "ACCOUNT": "" if ACCOUNT is None else ACCOUNT.address,
     "BLOCKS_BETWEEN_EXECUTION": BLOCKS_BETWEEN_EXECUTION,

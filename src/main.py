@@ -15,6 +15,7 @@ from variables import (
     SERVER_PORT,
     LOG_LEVEL,
     PROMETHEUS_PORT,
+    PROMETHEUS_PREFIX,
     WEB3_RPC_ENDPOINTS,
     CL_RPC_ENDPOINTS,
     SLEEP_INTERVAL_SECONDS,
@@ -64,10 +65,14 @@ def main():
     # Start health server in background thread
     start_health_server(SERVER_PORT)
     start_http_server(PROMETHEUS_PORT)
+    
+    logger.info({"msg": "Initializing metrics for web3 requests.", "namespace": PROMETHEUS_PREFIX})
+    web3_multi_provider.init_metrics(
+        web3_multi_provider.MetricsConfig(namespace=PROMETHEUS_PREFIX)
+    )
+    
     w3 = create_web3(WEB3_RPC_ENDPOINTS)
     cl_client = create_cl_client(CL_RPC_ENDPOINTS)
-    logger.info({"msg": "Add metrics to web3 requests."})
-    web3_multi_provider.init_metrics()
 
     # Initialize TriggerExitBot
     bot = TriggerExitBot(w3, cl_client)

@@ -1,8 +1,9 @@
 from prometheus_client.metrics import Counter, Gauge, Info
-from variables import PUBLIC_ENV_VARS
+from variables import PROMETHEUS_PREFIX, PUBLIC_ENV_VARS
 
 TX_SEND = Counter(
-    "transactions_send", "Amount of send transaction from bot.", ["status"]
+    "transactions_send", "Amount of send transaction from bot.", ["status"],
+    namespace=PROMETHEUS_PREFIX,
 )
 
 # Initialize metrics
@@ -13,14 +14,16 @@ UNEXPECTED_EXCEPTIONS = Counter(
     "unexpected_exceptions",
     "Total count of unexpected exceptions",
     ["type"],
+    namespace=PROMETHEUS_PREFIX,
 )
 
 ACCOUNT_BALANCE = Gauge(
     "account_balance",
     "Account balance",
     ["address", "chain_id"],
+    namespace=PROMETHEUS_PREFIX,
 )
 
-INFO = Info(name="build", documentation="Info metric")
+INFO = Info(name="build", documentation="Info metric", namespace=PROMETHEUS_PREFIX)
 CONVERTED_PUBLIC_ENV = {k: str(v) for k, v in PUBLIC_ENV_VARS.items()}
 INFO.info(CONVERTED_PUBLIC_ENV)
