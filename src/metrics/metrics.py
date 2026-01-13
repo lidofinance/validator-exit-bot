@@ -34,9 +34,9 @@ EVENTS_PROCESSED = Counter(
     namespace=PROMETHEUS_PREFIX,
 )
 
-VALIDATORS_CHECKED = Counter(
+VALIDATORS_CHECKED = Gauge(
     "validators_checked",
-    "Number of validators checked for exit status",
+    "Current number of validators in each check status",
     ["module_id", "status"],  # already_exited, needs_exit, not_reported, skipped_module
     namespace=PROMETHEUS_PREFIX,
 )

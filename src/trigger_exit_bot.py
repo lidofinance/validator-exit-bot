@@ -348,6 +348,7 @@ class TriggerExitBot:
         validators_to_trigger = []
         validators_to_remove = []
         validators_by_module = {}
+        status_counts = {}
 
         for validator in validators:
             pubkey = validator["pubkey"]
@@ -381,9 +382,9 @@ class TriggerExitBot:
                     }
                 )
                 validators_to_remove.append(validator)
-                VALIDATORS_CHECKED.labels(
-                    module_id=str(module_id), status="already_exited"
-                ).inc()
+                status_counts[(str(module_id), "already_exited")] = (
+                    status_counts.get((str(module_id), "already_exited"), 0) + 1
+                )
                 continue
 
             # Check if module_id is in the whitelist
@@ -395,9 +396,9 @@ class TriggerExitBot:
                         "validator_index": validator_index,
                     }
                 )
-                VALIDATORS_CHECKED.labels(
-                    module_id=str(module_id), status="skipped_module"
-                ).inc()
+                status_counts[(str(module_id), "skipped_module")] = (
+                    status_counts.get((str(module_id), "skipped_module"), 0) + 1
+                )
                 continue
 
             # Get the node operator registry for this module
@@ -428,9 +429,9 @@ class TriggerExitBot:
                     }
                 )
                 validators_to_trigger.append(validator)
-                VALIDATORS_CHECKED.labels(
-                    module_id=str(module_id), status="needs_exit"
-                ).inc()
+                status_counts[(str(module_id), "needs_exit")] = (
+                    status_counts.get((str(module_id), "needs_exit"), 0) + 1
+                )
                 
                 validators_by_module[module_id] = validators_by_module.get(module_id, 0) + 1
             else:
@@ -441,9 +442,9 @@ class TriggerExitBot:
                         "validator_index": validator_index,
                     }
                 )
-                VALIDATORS_CHECKED.labels(
-                    module_id=str(module_id), status="not_reported"
-                ).inc()
+                status_counts[(str(module_id), "not_reported")] = (
+                    status_counts.get((str(module_id), "not_reported"), 0) + 1
+                )
 
         # Remove exited validators from state
         if validators_to_remove:
@@ -458,6 +459,9 @@ class TriggerExitBot:
                 }
             )
 
+        for (module_id, status), count in status_counts.items():
+            VALIDATORS_CHECKED.labels(module_id=module_id, status=status).set(count)
+        
         for module_id, count in validators_by_module.items():
             PENDING_VALIDATORS.labels(module_id=str(module_id)).set(count)
         
