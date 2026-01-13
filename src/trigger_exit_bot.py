@@ -11,6 +11,12 @@ from web3.types import BlockIdentifier, TxReceipt, TxData, Wei
 from utils.cl_client import CLClient
 from utils.exit_data_decoder import decode_all_validators
 import variables
+from metrics.metrics import (
+    EVENTS_PROCESSED,
+    VALIDATORS_CHECKED,
+    VALIDATORS_TRIGGERED,
+    PENDING_VALIDATORS,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -135,6 +141,7 @@ class TriggerExitBot:
             tx_data, tx_receipt = self._get_transaction_data(transaction_hash)
 
             if tx_data is None or tx_receipt is None:
+                EVENTS_PROCESSED.labels(status="failed").inc()
                 raise ValueError("Could not get transaction data")
 
             # Check if transaction was successful
@@ -146,6 +153,7 @@ class TriggerExitBot:
                         "status": tx_receipt["status"],
                     }
                 )
+                EVENTS_PROCESSED.labels(status="skipped").inc()
                 continue
 
             logger.info(
@@ -168,8 +176,10 @@ class TriggerExitBot:
 
             if function_name == "submitReportData":
                 self._process_submit_report_data(decoded_data)
+                EVENTS_PROCESSED.labels(status="success").inc()
             elif function_name == "submitExitRequestsData":
                 self._process_submit_exit_requests_data(decoded_data)
+                EVENTS_PROCESSED.labels(status="success").inc()
 
         # After processing all events, check and trigger exits for ALL validators in state
         logger.info(
@@ -337,6 +347,7 @@ class TriggerExitBot:
 
         validators_to_trigger = []
         validators_to_remove = []
+        validators_by_module = {}
 
         for validator in validators:
             pubkey = validator["pubkey"]
@@ -370,6 +381,9 @@ class TriggerExitBot:
                     }
                 )
                 validators_to_remove.append(validator)
+                VALIDATORS_CHECKED.labels(
+                    module_id=str(module_id), status="already_exited"
+                ).inc()
                 continue
 
             # Check if module_id is in the whitelist
@@ -381,6 +395,9 @@ class TriggerExitBot:
                         "validator_index": validator_index,
                     }
                 )
+                VALIDATORS_CHECKED.labels(
+                    module_id=str(module_id), status="skipped_module"
+                ).inc()
                 continue
 
             # Get the node operator registry for this module
@@ -411,6 +428,11 @@ class TriggerExitBot:
                     }
                 )
                 validators_to_trigger.append(validator)
+                VALIDATORS_CHECKED.labels(
+                    module_id=str(module_id), status="needs_exit"
+                ).inc()
+                
+                validators_by_module[module_id] = validators_by_module.get(module_id, 0) + 1
             else:
                 logger.info(
                     {
@@ -419,6 +441,9 @@ class TriggerExitBot:
                         "validator_index": validator_index,
                     }
                 )
+                VALIDATORS_CHECKED.labels(
+                    module_id=str(module_id), status="not_reported"
+                ).inc()
 
         # Remove exited validators from state
         if validators_to_remove:
@@ -432,6 +457,15 @@ class TriggerExitBot:
                     "remaining_count": len(self.validators_map[data_key]),
                 }
             )
+
+        for module_id, count in validators_by_module.items():
+            PENDING_VALIDATORS.labels(module_id=str(module_id)).set(count)
+        
+        remaining_validators = self.validators_map.get(data_key, [])
+        for validator in remaining_validators:
+            mid = validator["moduleId"]
+            if mid not in validators_by_module and mid in variables.MODULES_WHITELIST:
+                PENDING_VALIDATORS.labels(module_id=str(mid)).set(0)
 
         # Trigger exits for reported validators
         if validators_to_trigger:
@@ -516,6 +550,12 @@ class TriggerExitBot:
         )
 
         if success:
+            for validator in validators_to_trigger:
+                VALIDATORS_TRIGGERED.labels(
+                    module_id=str(validator["moduleId"]),
+                    node_operator_id=str(validator["nodeOpId"]),
+                ).inc()
+            
             logger.info(
                 {
                     "msg": "Successfully triggered exits",

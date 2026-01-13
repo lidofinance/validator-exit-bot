@@ -1,8 +1,10 @@
-from prometheus_client.metrics import Counter, Gauge, Info
+from prometheus_client.metrics import Counter, Gauge, Info, Histogram
 from variables import PROMETHEUS_PREFIX, PUBLIC_ENV_VARS
 
 TX_SEND = Counter(
-    "transactions_send", "Amount of send transaction from bot.", ["status"],
+    "transactions_send",
+    "Amount of send transaction from bot.",
+    ["status"],
     namespace=PROMETHEUS_PREFIX,
 )
 
@@ -19,8 +21,52 @@ UNEXPECTED_EXCEPTIONS = Counter(
 
 ACCOUNT_BALANCE = Gauge(
     "account_balance",
-    "Account balance",
+    "Account balance in wei",
     ["address", "chain_id"],
+    namespace=PROMETHEUS_PREFIX,
+)
+
+
+EVENTS_PROCESSED = Counter(
+    "exit_events_processed",
+    "Number of ExitDataProcessing events processed",
+    ["status"],  # success, failed, skipped
+    namespace=PROMETHEUS_PREFIX,
+)
+
+VALIDATORS_CHECKED = Counter(
+    "validators_checked",
+    "Number of validators checked for exit status",
+    ["module_id", "status"],  # already_exited, needs_exit, not_reported, skipped_module
+    namespace=PROMETHEUS_PREFIX,
+)
+
+VALIDATORS_TRIGGERED = Counter(
+    "validators_triggered",
+    "Number of validators for which exit was triggered",
+    ["module_id", "node_operator_id"],
+    namespace=PROMETHEUS_PREFIX,
+)
+
+LAST_PROCESSED_BLOCK = Gauge(
+    "last_processed_block",
+    "Last block number processed by the bot",
+    ["chain_id"],
+    namespace=PROMETHEUS_PREFIX,
+)
+
+BOT_CYCLE_DURATION = Histogram(
+    "bot_cycle_duration_seconds",
+    "Duration of bot cycle execution in seconds",
+    ["status"],  # success, error
+    namespace=PROMETHEUS_PREFIX,
+    buckets=(0.5, 1, 2, 5, 10, 30, 60, 120, 300),
+)
+
+PENDING_VALIDATORS = Gauge(
+    "pending_validators",
+    "Number of validators pending exit trigger (reported but not exited)",
+    ["module_id"],
     namespace=PROMETHEUS_PREFIX,
 )
 

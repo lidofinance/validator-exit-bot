@@ -1,7 +1,11 @@
 import logging
 import time
 from metrics import metrics
-from metrics.metrics import UNEXPECTED_EXCEPTIONS
+from metrics.metrics import (
+    UNEXPECTED_EXCEPTIONS,
+    BOT_CYCLE_DURATION,
+    LAST_PROCESSED_BLOCK,
+)
 import structlog
 import web3_multi_provider
 from web3_multi_provider.metrics import MetricsConfig
@@ -121,11 +125,18 @@ def main():
                     }
                 )
             # Fetch and process ExitDataProcessing events
+            cycle_start_time = time.time()
             try:
                 events = bot.trigger_exits(
                     from_block=from_block, to_block=finalized_block
                 )
                 last_processed_block = finalized_block
+
+                cycle_duration = time.time() - cycle_start_time
+                BOT_CYCLE_DURATION.labels(status="success").observe(cycle_duration)
+                LAST_PROCESSED_BLOCK.labels(chain_id=w3.eth.chain_id).set(
+                    last_processed_block
+                )
 
                 logger.info(
                     {
@@ -134,10 +145,14 @@ def main():
                         "from_block": from_block,
                         "to_block": finalized_block,
                         "last_processed_block": last_processed_block,
+                        "cycle_duration_seconds": cycle_duration,
                         "sleeping_for_seconds": SLEEP_INTERVAL_SECONDS,
                     }
                 )
             except Exception as e:
+                cycle_duration = time.time() - cycle_start_time
+                BOT_CYCLE_DURATION.labels(status="error").observe(cycle_duration)
+                
                 error_type = type(e).__name__
                 UNEXPECTED_EXCEPTIONS.labels(type=error_type).inc()
                 logger.error(
@@ -147,6 +162,7 @@ def main():
                         "error_type": error_type,
                         "from_block": from_block,
                         "to_block": finalized_block,
+                        "cycle_duration_seconds": cycle_duration,
                     },
                     exc_info=True,
                 )
