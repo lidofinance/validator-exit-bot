@@ -3,7 +3,10 @@ package-mode = false
 name = "validator-exit-bot"
 version = "0.1.0"
 description = ""
-authors = ["F4ever <raman.s@lido.fi>"]
+authors = [
+    "hweawer",
+    "F4ever <raman.s@lido.fi>",
+]
 license = "GPL-3.0"
 readme = "README.md"
 

@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-An automated bot that monitors the Validator Exit Bus Oracle (VEBO) contract and triggers validator exits for Lido node operators. When the oracle reports validators that need to exit, the bot automatically checks their status and sends exit transactions for those that are reported but haven't exited yet.
+An automated solution to exit late Lido validators using triggerable exit requests ([EIP-7002](https://eips.ethereum.org/EIPS/eip-7002)). Contains a CLI to generate exit data for manual submission. 
 
 ## 🤖 What the Bot Does
 
@@ -11,10 +11,8 @@ The Validator Exit Bot is an autonomous service that:
 1. **Monitors** the VEBO contract for `ExitDataProcessing` events containing exit requests
 2. **Decodes** exit request data to identify validators that need to exit
 3. **Checks** each validator's current status on the Consensus Layer
-4. **Verifies** if the validator's exit key has been reported by the node operator
-5. **Triggers** exit transactions automatically for validators that are reported but not yet exited
-6. **Pays** the withdrawal request fee for each exit from the bot's account
-7. **Tracks** validator state and removes successfully exited validators
+4. **Triggers** exits automatically for validators that missed deadlines
+5. **Pays** the withdrawal request fee for each exit from the bot's account
 
 The bot runs continuously, processing historical events on first start (configurable lookback period) and then monitoring new events in real-time.
 
@@ -22,7 +20,7 @@ The bot runs continuously, processing historical events on first start (configur
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - Poetry for dependency management
 - Access to Ethereum Execution Layer RPC endpoint(s)
 - Access to Consensus Layer Beacon API endpoint(s)
@@ -56,8 +54,8 @@ MODULES_WHITELIST=1,2
 # Optional: Lookback period on first start (default: 7 days)
 LOOKBACK_DAYS=7
 
-# Optional: Sleep interval between cycles (default: 12 seconds)
-SLEEP_INTERVAL_SECONDS=12
+# Optional: Sleep interval between cycles (default: 384 seconds)
+SLEEP_INTERVAL_SECONDS=384
 
 # Optional: Logging level (default: INFO)
 LOG_LEVEL=INFO
@@ -147,8 +145,8 @@ The bot consists of several key components:
    a. Check if validator already exited (CL API)
    b. If exited → remove from state
    c. If not exited → check if module is whitelisted
-   d. Check if exit key reported (Node Operator Registry)
-   e. If reported and not exited → add to trigger list
+   d. Check if exit already processed by NO
+   e. If exit deadline missed → add validator to trigger exit list
    ↓
 5. Build and send trigger_exits transaction with:
    - Original exit data
@@ -160,22 +158,7 @@ The bot consists of several key components:
 6. Sleep for configured interval and repeat
 ```
 
-### State Management
-
-The bot maintains in-memory state of validators from decoded exit requests:
-- Uses SHA256 hashing of exit data as keys for efficient storage
-- Automatically removes validators once they've exited
-- Persists across multiple events processing the same data
-
-### Transaction Safety
-
-Before sending any transaction, the bot:
-1. Validates the transaction with a local call (`eth_call`)
-2. Only sends if validation passes
-3. Waits for transaction confirmation with configurable timeout
-4. Logs success/failure with detailed context
-
-## 📚 Utility Scripts (Optional)
+## 📚 Utility Scripts
 
 In addition to the automated bot, this repository includes utility scripts for manually generating calldata for validator exit requests. These are useful for one-off exits or testing.
 
@@ -192,7 +175,7 @@ The `scripts/generate.py` tool generates properly formatted calldata for validat
 
 ```bash
 # Generate Easy Track calldata for validator exits
-poetry run python scripts/generate.py \
+poetry run python -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
   --cl-url http://localhost:5052 \
   et-hash \
@@ -200,7 +183,7 @@ poetry run python scripts/generate.py \
   --vi 123457
 
 # Generate VEB data reveal calldata
-poetry run python scripts/generate.py \
+poetry run python -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
   --cl-url http://localhost:5052 \
   veb-data \
@@ -217,60 +200,19 @@ export KAPI_URL=https://keys-api.lido.fi
 export CL_URL=http://localhost:5052
 
 # Now you can run commands without URL flags
-poetry run python scripts/generate.py et-hash --vi 123456
-poetry run python scripts/generate.py veb-data --vi 123456
+poetry run python -m scripts.generate et-hash --vi 123456
+poetry run python -m scripts.generate veb-data --vi 123456
 ```
-
-#### Debug Mode
-
-Enable debug output to see detailed execution steps:
-
-```bash
-poetry run python scripts/generate.py \
-  --debug \
-  --kapi-url https://keys-api.lido.fi \
-  --cl-url http://localhost:5052 \
-  et-hash \
-  --vi 123456
-```
-
-Output example:
-```
-[DEBUG] Connected to KAPI: https://keys-api.lido.fi
-[DEBUG] Connected to CL: http://localhost:5052
-[DEBUG] CLI initialized successfully
-[DEBUG] Generating ET hash submit for validators: (123456,)
-[DEBUG] Fetching validator data from CL and KAPI...
-[DEBUG] Built 1 exit requests
-[DEBUG]   1. VI=123456, Module=1, Operator=42, KeyIdx=100
-[DEBUG] Successfully generated ET calldata
-[DEBUG] Calldata length: 324 characters (162 bytes)
-0x000000000000000000000000000000000000000000000000000000000000002000000...
-```
-
-### Using with Ape Framework (Optional)
-
-If you have the Ape framework configured, you can also run the script through Ape:
-
-```bash
-ape run generate \
-  --kapi-url https://keys-api.lido.fi \
-  --cl-url http://localhost:5052 \
-  et-hash \
-  --vi 123456
-```
-
-Note: Ape is not required for running the bot or the utility scripts.
 
 ### Command Reference
 
 #### Global Options
 
-| Option | Description | Default | Environment Variable |
-|--------|-------------|---------|---------------------|
-| `--debug` | Enable debug logging | `false` | - |
-| `--kapi-url` | Keys API URL | `https://keys-api.lido.fi` | `KAPI_URL` |
-| `--cl-url` | Consensus Layer API URL | `http://localhost:5052` | `CL_URL` |
+| Option       | Description             | Default                    | Environment Variable |
+|--------------|-------------------------|----------------------------|----------------------|
+| `--debug`    | Enable debug logging    | `false`                    | -                    |
+| `--kapi-url` | Keys API URL            | `https://keys-api.lido.fi` | `KAPI_URL`           |
+| `--cl-url`   | Consensus Layer API URL | `http://localhost:5052`    | `CL_URL`             |
 
 #### et-hash Command
 
@@ -278,7 +220,7 @@ Generate Easy Track hash submit calldata.
 
 **Usage:**
 ```bash
-poetry run python scripts/generate.py et-hash --vi <VALIDATOR_INDEX> [--vi <VALIDATOR_INDEX> ...]
+poetry run python -m scripts.generate et-hash --vi <VALIDATOR_INDEX> [--vi <VALIDATOR_INDEX> ...]
 ```
 
 **Options:**
@@ -290,7 +232,7 @@ poetry run python scripts/generate.py et-hash --vi <VALIDATOR_INDEX> [--vi <VALI
 
 **Example:**
 ```bash
-poetry run python scripts/generate.py et-hash --vi 123456 --vi 123457 --vi 123458
+poetry run python -m scripts.generate et-hash --vi 123456 --vi 123457 --vi 123458
 ```
 
 #### veb-data Command
@@ -299,7 +241,7 @@ Generate Validator Exit Bus data reveal calldata.
 
 **Usage:**
 ```bash
-poetry run python scripts/generate.py veb-data --vi <VALIDATOR_INDEX> [--vi <VALIDATOR_INDEX> ...]
+poetry run python -m scripts.generate veb-data --vi <VALIDATOR_INDEX> [--vi <VALIDATOR_INDEX> ...]
 ```
 
 **Options:**
@@ -311,45 +253,20 @@ poetry run python scripts/generate.py veb-data --vi <VALIDATOR_INDEX> [--vi <VAL
 
 **Example:**
 ```bash
-poetry run python scripts/generate.py veb-data --vi 123456 --vi 123457 --vi 123458
+poetry run python -m scripts.generate veb-data --vi 123456 --vi 123457 --vi 123458
 ```
-
-### Script Data Flow
-
-When using the utility scripts:
-
-1. **Input**: Validator indexes provided via `--vi` flags
-2. **Consensus Layer Query**: Fetches validator public keys from CL API
-3. **Keys API Query**: Fetches Lido staking module metadata (module ID, operator ID, key index)
-4. **Data Matching**: Matches validators with their metadata
-5. **Sorting**: Sorts requests by (module_id, operator_id, validator_index)
-6. **Encoding**: Encodes data in requested format (ET or VEB)
-7. **Output**: Hex-encoded calldata to stdout
 
 ### Exit Request Structure
 
 Each exit request contains:
 
-| Field | Size | Description |
-|-------|------|-------------|
-| `module_id` | 3 bytes | Staking module ID |
-| `operator_id` | 5 bytes | Node operator ID within the module |
-| `validator_index` | 8 bytes | Validator index on beacon chain |
-| `validator_pubkey` | 48 bytes | BLS public key of the validator |
-| `key_index` | - | Key index in operator's list (ET only) |
-
-### Format Differences
-
-**Easy Track (et-hash):**
-- ABI-encoded array of structs
-- Includes `key_index` field
-- Used for submitting via Easy Track governance
-
-**VEB (veb-data):**
-- Raw packed bytes (no ABI encoding)
-- Does NOT include `key_index`
-- 64 bytes per validator
-- Used for revealing data to VEB contract
+| Field              | Size     | Description                            |
+|--------------------|----------|----------------------------------------|
+| `module_id`        | 3 bytes  | Staking module ID                      |
+| `operator_id`      | 5 bytes  | Node operator ID within the module     |
+| `validator_index`  | 8 bytes  | Validator index on beacon chain        |
+| `validator_pubkey` | 48 bytes | BLS public key of the validator        |
+| `key_index`        | -        | Key index in operator's list (ET only) |
 
 ## 📋 Examples
 
@@ -360,7 +277,7 @@ Each exit request contains:
 WEB3_RPC_ENDPOINTS=https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY \
 CL_RPC_ENDPOINTS=https://beacon-node.example.com \
 ACCOUNT=0x1234567890abcdef... \
-poetry run python src/main.py
+poetry run python -m src.main
 ```
 
 Example log output:
@@ -381,7 +298,7 @@ Example log output:
 
 ```bash
 # Generate ET calldata for one validator
-poetry run python scripts/generate.py et-hash --vi 123456
+poetry run python -m scripts.generate et-hash --vi 123456
 
 # Output can be used in Etherscan or governance tools
 # Copy the hex output and use it as calldata
@@ -391,7 +308,7 @@ poetry run python scripts/generate.py et-hash --vi 123456
 
 ```bash
 # Exit multiple validators at once
-poetry run python scripts/generate.py et-hash \
+poetry run python -m scripts.generate et-hash \
   --vi 123456 \
   --vi 123457 \
   --vi 123458 \
@@ -403,17 +320,17 @@ poetry run python scripts/generate.py et-hash \
 
 ```bash
 # Save calldata to file for later use
-poetry run python scripts/generate.py et-hash --vi 123456 > calldata.txt
+poetry run python -m scripts.generate et-hash --vi 123456 > calldata.txt
 
 # Or redirect stderr to see debug info while saving output
-poetry run python scripts/generate.py --debug et-hash --vi 123456 2>&1 | tee output.log
+poetry run python -m scripts.generate --debug et-hash --vi 123456 2>&1 | tee output.log
 ```
 
 #### Piping to Other Tools
 
 ```bash
 # Pipe output to cast (Foundry) for transaction submission
-poetry run python scripts/generate.py et-hash --vi 123456 | \
+poetry run python -m scripts.generate et-hash --vi 123456 | \
   cast send 0xContractAddress "submitExitRequests(bytes)" --rpc-url $RPC_URL
 ```
 
@@ -477,45 +394,20 @@ poetry run pytest tests/scripts/ -v
 
 See [tests/README.md](tests/README.md) for detailed testing documentation.
 
-#### Testing the Bot with Testnet
-
-To test the bot with Holesky testnet:
-
-```bash
-# Configure .env for testnet
-WEB3_RPC_ENDPOINTS=https://holesky-rpc.example.com
-CL_RPC_ENDPOINTS=https://beacon-holesky.example.com
-ACCOUNT=0x... # Your testnet account
-LOG_LEVEL=DEBUG
-
-# Run the bot
-poetry run python src/main.py
-```
-
-#### Testing Utility Scripts
-
-```bash
-# Test scripts with Holesky testnet
-export KAPI_URL=https://keys-api-holesky.testnet.fi
-export CL_URL=https://beacon-holesky.example.com
-
-poetry run python scripts/generate.py et-hash --vi 123456
-```
-
 ## ⚠️ Error Handling & Troubleshooting
 
 ### Bot Errors
 
 The bot is designed to be resilient and will continue running even if individual operations fail:
 
-| Error/Issue | Cause | Solution |
-|-------------|-------|----------|
-| Transaction check failed | Insufficient balance, wrong data, or contract state issue | Check account balance and withdrawal vault fee, review logs for details |
-| Failed to trigger exits | Transaction reverted or timed out | Review transaction logs, ensure network connectivity, check gas settings |
-| Module not in whitelist | Validator's module ID not in `MODULES_WHITELIST` | Update whitelist or remove restriction |
-| Node operator registry not found | Unknown module ID | Verify the staking module exists in StakingRouter |
-| Connection errors | RPC endpoint unreachable | Check RPC URLs, add fallback endpoints |
-| Unexpected exceptions | Various runtime errors | Check logs for stack trace, reported in metrics |
+| Error/Issue                      | Cause                                                     | Solution                                                                 |
+|----------------------------------|-----------------------------------------------------------|--------------------------------------------------------------------------|
+| Transaction check failed         | Insufficient balance, wrong data, or contract state issue | Check account balance and withdrawal vault fee, review logs for details  |
+| Failed to trigger exits          | Transaction reverted or timed out                         | Review transaction logs, ensure network connectivity, check gas settings |
+| Module not in whitelist          | Validator's module ID not in `MODULES_WHITELIST`          | Update whitelist or remove restriction                                   |
+| Node operator registry not found | Unknown module ID                                         | Verify the staking module exists in StakingRouter                        |
+| Connection errors                | RPC endpoint unreachable                                  | Check RPC URLs, add fallback endpoints                                   |
+| Unexpected exceptions            | Various runtime errors                                    | Check logs for stack trace, reported in metrics                          |
 
 The bot logs all errors with context and continues operation. Monitor the `/metrics` endpoint for `unexpected_exceptions_total` counter.
 
@@ -523,12 +415,12 @@ The bot logs all errors with context and continues operation. Monitor the `/metr
 
 When using the utility scripts:
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `Validator index X not found in CL` | Validator doesn't exist on beacon chain | Verify validator index is correct |
-| `Validator pubkey not found in KAPI` | Validator not in Lido staking modules | Ensure validator belongs to Lido |
-| Connection errors | Network issues or wrong URLs | Check URLs and network connectivity |
-| No validators specified | Missing `--vi` flag | Add at least one `--vi` option |
+| Error                                | Cause                                   | Solution                            |
+|--------------------------------------|-----------------------------------------|-------------------------------------|
+| `Validator index X not found in CL`  | Validator doesn't exist on beacon chain | Verify validator index is correct   |
+| `Validator pubkey not found in KAPI` | Validator not in Lido staking modules   | Ensure validator belongs to Lido    |
+| Connection errors                    | Network issues or wrong URLs            | Check URLs and network connectivity |
+| No validators specified              | Missing `--vi` flag                     | Add at least one `--vi` option      |
 
 ### Monitoring
 
@@ -576,7 +468,7 @@ Health and metrics endpoints help monitor bot operation:
 
 ## 📄 License
 
-2025 Lido <info@lido.fi>
+2026 Lido <info@lido.fi>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -589,4 +481,3 @@ GNU General Public License for more details.
 
 You should have received a copy of the [GNU General Public License](LICENSE)
 along with this program. If not, see <https://www.gnu.org/licenses/>.
-

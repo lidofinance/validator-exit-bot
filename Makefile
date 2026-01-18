@@ -19,6 +19,7 @@ help:
 	@echo "  rebuild     Clean rebuild (no cache)"
 	@echo "  config      Validate and view docker-compose config"
 	@echo "  ps          Show running containers"
+	@echo "  install     Install all dependencies"
 	@echo "  test        Run unit tests"
 	@echo "  test-cov    Run tests with coverage report"
 	@echo "  test-watch  Run tests in watch mode"
@@ -108,6 +109,11 @@ check:
 	@docker --version || echo "❌ Docker not found"
 	@docker-compose --version || echo "❌ docker-compose not found"
 	@echo "✅ All requirements met"
+
+install:
+	@echo "Install dependencies using poetry for developing"
+	@echo ""
+	poetry install --with dev
 
 # Run unit tests
 test:
