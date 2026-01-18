@@ -1,6 +1,7 @@
-import structlog
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

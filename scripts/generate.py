@@ -71,11 +71,12 @@ The script will fail with an error message if:
 """
 
 import sys
+
 import click
 
+from scripts.encode_exit_requests import ValidatorExitData
 from scripts.exit_request import build_exit_request
 from scripts.kapi_client import KeysAPIClient
-from scripts.encode_exit_requests import ValidatorExitData
 from src.utils.cl_client import CLClient
 
 

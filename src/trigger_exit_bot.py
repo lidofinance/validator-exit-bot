@@ -1,22 +1,24 @@
+from hashlib import sha256
+from typing import Any, Optional, cast
+
+import structlog
 from eth_typing import Hash32, HexStr
-from blockchain.contracts.validator_exit_bus_oracle import (
+from web3.types import BlockIdentifier, TxData, TxReceipt, Wei
+
+from src import variables
+from src.blockchain.contracts.validator_exit_bus_oracle import (
     ValidatorExitBusOracleContract,
 )
-from blockchain.web3_extentions.transaction import TransactionUtils
-import structlog
-from typing import Optional, Any, cast
-from hashlib import sha256
-from blockchain.typings import Web3
-from web3.types import BlockIdentifier, TxReceipt, TxData, Wei
-from utils.cl_client import CLClient
-from utils.exit_data_decoder import decode_all_validators
-import variables
-from metrics.metrics import (
+from src.blockchain.typings import Web3
+from src.blockchain.web3_extentions.transaction import TransactionUtils
+from src.metrics.metrics import (
     EVENTS_PROCESSED,
+    PENDING_VALIDATORS,
     VALIDATORS_CHECKED,
     VALIDATORS_TRIGGERED,
-    PENDING_VALIDATORS,
 )
+from src.utils.cl_client import CLClient
+from src.utils.exit_data_decoder import decode_all_validators
 
 logger = structlog.get_logger(__name__)
 
@@ -432,8 +434,10 @@ class TriggerExitBot:
                 status_counts[(str(module_id), "needs_exit")] = (
                     status_counts.get((str(module_id), "needs_exit"), 0) + 1
                 )
-                
-                validators_by_module[module_id] = validators_by_module.get(module_id, 0) + 1
+
+                validators_by_module[module_id] = (
+                    validators_by_module.get(module_id, 0) + 1
+                )
             else:
                 logger.info(
                     {
@@ -461,10 +465,10 @@ class TriggerExitBot:
 
         for (module_id, status), count in status_counts.items():
             VALIDATORS_CHECKED.labels(module_id=module_id, status=status).set(count)
-        
+
         for module_id, count in validators_by_module.items():
             PENDING_VALIDATORS.labels(module_id=str(module_id)).set(count)
-        
+
         remaining_validators = self.validators_map.get(data_key, [])
         for validator in remaining_validators:
             mid = validator["moduleId"]
@@ -559,7 +563,7 @@ class TriggerExitBot:
                     module_id=str(validator["moduleId"]),
                     node_operator_id=str(validator["nodeOpId"]),
                 ).inc()
-            
+
             logger.info(
                 {
                     "msg": "Successfully triggered exits",

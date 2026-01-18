@@ -1,5 +1,6 @@
-from prometheus_client.metrics import Counter, Gauge, Info, Histogram
-from variables import PROMETHEUS_PREFIX, PUBLIC_ENV_VARS
+from prometheus_client.metrics import Counter, Gauge, Histogram, Info
+
+from src.variables import PROMETHEUS_PREFIX, PUBLIC_ENV_VARS
 
 TX_SEND = Counter(
     "transactions_send",

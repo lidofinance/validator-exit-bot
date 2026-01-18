@@ -1,8 +1,9 @@
 """Simple unit tests for scripts/exit_request.py"""
 
-from eth_typing.encoding import HexStr
-import pytest
 from unittest.mock import Mock
+
+import pytest
+from eth_typing.encoding import HexStr
 
 from scripts.exit_request import build_exit_request
 from scripts.kapi_client import KapiKey

@@ -1,17 +1,17 @@
 # pyright: reportTypedDictNotRequiredAccess=false
 
 import structlog
-
-import variables
-from blockchain.constants import SLOT_TIME
 from eth_account.datastructures import SignedTransaction
 from eth_typing import ChecksumAddress
-from metrics.metrics import TX_SEND
 from web3 import Web3
 from web3.contract.contract import ContractFunction
 from web3.exceptions import ContractLogicError, TimeExhausted
 from web3.module import Module
 from web3.types import TxParams, Wei
+
+from src import variables
+from src.blockchain.constants import SLOT_TIME
+from src.metrics.metrics import TX_SEND
 
 logger = structlog.get_logger(__name__)
 

@@ -1,34 +1,36 @@
 import logging
 import time
-from metrics import metrics
-from metrics.metrics import (
-    UNEXPECTED_EXCEPTIONS,
-    BOT_CYCLE_DURATION,
-    LAST_PROCESSED_BLOCK,
-)
+
 import structlog
 import web3_multi_provider
-from web3_multi_provider.metrics import MetricsConfig
-from blockchain.typings import Web3
-from blockchain.web3_extentions.lido_contracts import LidoContracts
-from blockchain.web3_extentions.transaction import TransactionUtils
-from health_server import start_health_server
 from prometheus_client import start_http_server
-from trigger_exit_bot import TriggerExitBot
-from utils.cl_client import CLClient
-from variables import (
-    SERVER_PORT,
+from web3_multi_provider import FallbackProvider
+from web3_multi_provider.metrics import MetricsConfig
+
+from src.blockchain.constants import SLOT_TIME
+from src.blockchain.typings import Web3
+from src.blockchain.web3_extentions.lido_contracts import LidoContracts
+from src.blockchain.web3_extentions.transaction import TransactionUtils
+from src.health_server import start_health_server
+from src.metrics import metrics
+from src.metrics.metrics import (
+    BOT_CYCLE_DURATION,
+    LAST_PROCESSED_BLOCK,
+    UNEXPECTED_EXCEPTIONS,
+)
+from src.trigger_exit_bot import TriggerExitBot
+from src.utils.cl_client import CLClient
+from src.variables import (
+    ACCOUNT,
+    CL_RPC_ENDPOINTS,
     LOG_LEVEL,
+    LOOKBACK_DAYS,
     PROMETHEUS_PORT,
     PROMETHEUS_PREFIX,
-    WEB3_RPC_ENDPOINTS,
-    CL_RPC_ENDPOINTS,
+    SERVER_PORT,
     SLEEP_INTERVAL_SECONDS,
-    LOOKBACK_DAYS,
-    ACCOUNT,
+    WEB3_RPC_ENDPOINTS,
 )
-from blockchain.constants import SLOT_TIME
-from web3_multi_provider import FallbackProvider
 
 # Configure structlog for JSON logging
 structlog.configure(
@@ -70,12 +72,15 @@ def main():
     # Start health server in background thread
     start_health_server(SERVER_PORT)
     start_http_server(PROMETHEUS_PORT)
-    
-    logger.info({"msg": "Initializing metrics for web3 requests.", "namespace": PROMETHEUS_PREFIX})
-    web3_multi_provider.init_metrics(
-        MetricsConfig(namespace=PROMETHEUS_PREFIX)
+
+    logger.info(
+        {
+            "msg": "Initializing metrics for web3 requests.",
+            "namespace": PROMETHEUS_PREFIX,
+        }
     )
-    
+    web3_multi_provider.init_metrics(MetricsConfig(namespace=PROMETHEUS_PREFIX))
+
     w3 = create_web3(WEB3_RPC_ENDPOINTS)
     cl_client = create_cl_client(CL_RPC_ENDPOINTS)
 
@@ -152,7 +157,7 @@ def main():
             except Exception as e:
                 cycle_duration = time.time() - cycle_start_time
                 BOT_CYCLE_DURATION.labels(status="error").observe(cycle_duration)
-                
+
                 error_type = type(e).__name__
                 UNEXPECTED_EXCEPTIONS.labels(type=error_type).inc()
                 logger.error(

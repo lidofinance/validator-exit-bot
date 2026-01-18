@@ -1,7 +1,7 @@
-import structlog
 import os
 from typing import Optional
 
+import structlog
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
 from web3 import Web3

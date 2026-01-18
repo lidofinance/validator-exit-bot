@@ -1,5 +1,5 @@
-from urllib.parse import urljoin
 from typing import Any, Optional
+from urllib.parse import urljoin
 
 import requests
 from eth_typing import HexStr

@@ -91,7 +91,7 @@ docker-compose down
 
 ```bash
 # Run the bot directly
-poetry run python src/main.py
+poetry run python -m src.main
 ```
 
 #### Using Make
