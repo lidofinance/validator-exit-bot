@@ -11,11 +11,14 @@ logger = structlog.get_logger(__name__)
 
 _last_pulse = datetime.now()
 
+
 def pulse():
     try:
-        requests.get(f'http://localhost:{variables.SERVER_PORT}/pulse/', timeout=10)
+        requests.get(f"http://localhost:{variables.SERVER_PORT}/pulse/", timeout=10)
     except requests.exceptions.ConnectionError as error:
-        logger.warning({'msg': 'Healthcheck server is not responding.', 'error': str(error)})
+        logger.warning(
+            {"msg": "Healthcheck server is not responding.", "error": str(error)}
+        )
 
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -24,7 +27,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global _last_pulse
 
-        if self.path == '/pulse/':
+        if self.path == "/pulse/":
             _last_pulse = datetime.now()
         if datetime.now() - _last_pulse > timedelta(minutes=10):
             self.send_response(503)
