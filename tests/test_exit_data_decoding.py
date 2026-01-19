@@ -7,9 +7,9 @@ into validator information using local Python implementation.
 import pytest
 
 from src.utils.exit_data_decoder import (
+    PACKED_REQUEST_LENGTH,
     decode_all_validators,
     unpack_exit_request,
-    PACKED_REQUEST_LENGTH,
 )
 
 

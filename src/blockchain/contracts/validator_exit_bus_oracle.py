@@ -1,9 +1,10 @@
-import structlog
 from typing import Any, Optional
 
-from blockchain.contracts.base_interface import ContractInterface
+import structlog
 from eth_typing import ChecksumAddress, HexStr
 from web3.types import BlockIdentifier, EventData
+
+from src.blockchain.contracts.base_interface import ContractInterface
 
 logger = structlog.get_logger(__name__)
 

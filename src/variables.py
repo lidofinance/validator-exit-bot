@@ -1,7 +1,7 @@
-import structlog
 import os
 from typing import Optional
 
+import structlog
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
 from web3 import Web3
@@ -33,13 +33,13 @@ else:
 DRY_RUN = os.getenv("DRY_RUN") == "true"
 
 MIN_PRIORITY_FEE = Web3.to_wei(*os.getenv("MIN_PRIORITY_FEE", "50 mwei").split(" "))
-MAX_PRIORITY_FEE = Web3.to_wei(*os.getenv("MAX_PRIORITY_FEE", "10 gwei").split(" "))
+MAX_PRIORITY_FEE = Web3.to_wei(*os.getenv("MAX_PRIORITY_FEE", "1 gwei").split(" "))
 
-MAX_GAS_FEE = Web3.to_wei(*os.getenv("MAX_GAS_FEE", "100 gwei").split(" "))
+MAX_GAS_FEE = Web3.to_wei(*os.getenv("MAX_GAS_FEE", "10 gwei").split(" "))
 CONTRACT_GAS_LIMIT = int(os.getenv("CONTRACT_GAS_LIMIT", 15 * 10**6))
 
 # Curated module strategy
-GAS_FEE_PERCENTILE_1: int = int(os.getenv("GAS_FEE_PERCENTILE_1", 20))
+GAS_FEE_PERCENTILE_1: int = int(os.getenv("GAS_FEE_PERCENTILE_1", 15))
 GAS_FEE_PERCENTILE_DAYS_HISTORY_1: int = int(
     os.getenv("GAS_FEE_PERCENTILE_DAYS_HISTORY_1", 1)
 )

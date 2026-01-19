@@ -5,15 +5,14 @@ This module provides local Python implementation of exit data unpacking,
 replicating the Solidity contract logic without requiring contract calls.
 """
 
-from typing import Dict, Any, List
-
+from typing import Any
 
 # Constants from Solidity contract
 PUBLIC_KEY_LENGTH = 48  # bytes
 PACKED_REQUEST_LENGTH = 64  # 16 bytes metadata + 48 bytes pubkey + 5 bytes padding
 
 
-def unpack_exit_request(exit_data: bytes, index: int) -> Dict[str, Any]:
+def unpack_exit_request(exit_data: bytes, index: int) -> dict[str, Any]:
     """
     Unpack a single exit request from packed data using local Python implementation.
 
@@ -76,7 +75,7 @@ def unpack_exit_request(exit_data: bytes, index: int) -> Dict[str, Any]:
     }
 
 
-def decode_all_validators(exit_data: bytes) -> List[Dict[str, Any]]:
+def decode_all_validators(exit_data: bytes) -> list[dict[str, Any]]:
     """
     Decode all validators from packed exit data using local Python implementation.
 
@@ -105,7 +104,7 @@ def decode_all_validators(exit_data: bytes) -> List[Dict[str, Any]]:
             validator = unpack_exit_request(exit_data, i)
             validators.append(validator)
         except Exception as e:
-            raise ValueError(f"Failed to unpack validator at index {i}: {e}")
+            raise ValueError(f"Failed to unpack validator at index {i}: {e}") from e
 
     return validators
 

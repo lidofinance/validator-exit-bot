@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell health metrics clean rebuild test test-cov test-watch
+.PHONY: help build up down restart logs shell health metrics clean rebuild test test-cov test-watch lint format
 
 # Default target
 help:
@@ -19,9 +19,12 @@ help:
 	@echo "  rebuild     Clean rebuild (no cache)"
 	@echo "  config      Validate and view docker-compose config"
 	@echo "  ps          Show running containers"
+	@echo "  install     Install all dependencies"
 	@echo "  test        Run unit tests"
 	@echo "  test-cov    Run tests with coverage report"
 	@echo "  test-watch  Run tests in watch mode"
+	@echo "  lint        Run linter (ruff check)"
+	@echo "  format      Format code (ruff format + fix imports)"
 	@echo "  run         Run bot locally (loads .env)"
 	@echo "  run-dry     Run bot locally in dry-run mode"
 
@@ -109,6 +112,23 @@ check:
 	@docker-compose --version || echo "❌ docker-compose not found"
 	@echo "✅ All requirements met"
 
+install:
+	@echo "Install dependencies using poetry for developing"
+	@echo ""
+	poetry install --with dev
+
+# Lint code with ruff
+lint:
+	@echo "Running ruff linter..."
+	poetry run ruff check src/ tests/ scripts/
+
+# Format code with ruff
+format:
+	@echo "Formatting code with ruff..."
+	poetry run ruff check src/ tests/ scripts/ --fix
+	poetry run ruff format src/ tests/ scripts/
+	@echo "✅ Code formatted"
+
 # Run unit tests
 test:
 	@echo "Running unit tests..."
@@ -131,7 +151,7 @@ run:
 	@echo "Running bot locally with .env..."
 	@if [ -f .env ]; then \
 		echo "✅ Loading .env file"; \
-		export $$(cat .env | grep -v '^#' | xargs) && poetry run python src/main.py; \
+		export $$(cat .env | grep -v '^#' | xargs) && poetry run python -m src.main; \
 	else \
 		echo "❌ .env file not found"; \
 		exit 1; \
@@ -142,7 +162,7 @@ run-dry:
 	@echo "Running bot in dry-run mode..."
 	@if [ -f .env ]; then \
 		echo "✅ Loading .env file with DRY_RUN=true"; \
-		export $$(cat .env | grep -v '^#' | xargs) && export DRY_RUN=true && poetry run python src/main.py; \
+		export $$(cat .env | grep -v '^#' | xargs) && export DRY_RUN=true && poetry run python -m src.main; \
 	else \
 		echo "❌ .env file not found"; \
 		exit 1; \

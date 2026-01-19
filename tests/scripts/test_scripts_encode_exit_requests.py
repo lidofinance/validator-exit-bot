@@ -1,7 +1,7 @@
 """Simple unit tests for scripts/encode_exit_requests.py"""
 
-from eth_typing.encoding import HexStr
 import pytest
+from eth_typing.encoding import HexStr
 
 from scripts.encode_exit_requests import ValidatorExitData
 from scripts.kapi_client import Key

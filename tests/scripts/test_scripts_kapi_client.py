@@ -1,10 +1,11 @@
 """Simple unit tests for scripts/kapi_client.py"""
 
-from eth_typing.encoding import HexStr
-import pytest
 from unittest.mock import Mock, patch
 
-from scripts.kapi_client import KeysAPIClient, Key, KapiKey
+import pytest
+from eth_typing.encoding import HexStr
+
+from scripts.kapi_client import KapiKey, Key, KeysAPIClient
 
 
 class TestKey:

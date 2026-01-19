@@ -22,9 +22,6 @@ Usage Examples:
 3. With debug output:
    poetry run python scripts/generate.py --debug --kapi-url https://keys-api.lido.fi --cl-url http://localhost:5052 et-hash --vi 123456
 
-4. Using with Ape:
-   ape run generate --kapi-url https://keys-api.lido.fi --cl-url http://localhost:5052 et-hash --vi 123456
-
 Environment Variables (optional):
 ----------------------------------
 You can set default URLs via environment variables:
@@ -74,11 +71,12 @@ The script will fail with an error message if:
 """
 
 import sys
+
 import click
 
+from scripts.encode_exit_requests import ValidatorExitData
 from scripts.exit_request import build_exit_request
 from scripts.kapi_client import KeysAPIClient
-from scripts.encode_exit_requests import ValidatorExitData
 from src.utils.cl_client import CLClient
 
 

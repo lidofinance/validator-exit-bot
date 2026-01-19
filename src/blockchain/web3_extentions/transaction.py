@@ -1,17 +1,17 @@
 # pyright: reportTypedDictNotRequiredAccess=false
 
 import structlog
-
-import variables
-from blockchain.constants import SLOT_TIME
 from eth_account.datastructures import SignedTransaction
 from eth_typing import ChecksumAddress
-from metrics.metrics import TX_SEND
 from web3 import Web3
 from web3.contract.contract import ContractFunction
 from web3.exceptions import ContractLogicError, TimeExhausted
 from web3.module import Module
 from web3.types import TxParams, Wei
+
+from src import variables
+from src.blockchain.constants import SLOT_TIME
+from src.metrics.metrics import TX_SEND
 
 logger = structlog.get_logger(__name__)
 
@@ -20,7 +20,9 @@ class TransactionUtils(Module):
     w3: Web3
 
     @staticmethod
-    def check(transaction: ContractFunction, value: Wei = Wei(0)) -> bool:
+    def check(transaction: ContractFunction, value: Wei | None = None) -> bool:
+        if value is None:
+            value = Wei(0)
         try:
             call_params = TxParams({})
             if value > 0:
@@ -37,8 +39,10 @@ class TransactionUtils(Module):
         self,
         transaction: ContractFunction,
         timeout_in_blocks: int,
-        value: Wei = Wei(0),
+        value: Wei | None = None,
     ) -> bool:
+        if value is None:
+            value = Wei(0)
         if not variables.ACCOUNT:
             logger.info(
                 {"msg": "Account was not provided. Sending transaction skipped."}
@@ -92,8 +96,10 @@ class TransactionUtils(Module):
     def _estimate_gas(
         transaction: ContractFunction,
         account_address: ChecksumAddress,
-        value: Wei = Wei(0),
+        value: Wei | None = None,
     ) -> int:
+        if value is None:
+            value = Wei(0)
         try:
             tx_params = TxParams({"from": account_address})
             if value > 0:

@@ -1,7 +1,7 @@
 import structlog
-
-from blockchain.contracts.base_interface import ContractInterface
 from web3.types import BlockIdentifier, Wei
+
+from src.blockchain.contracts.base_interface import ContractInterface
 
 logger = structlog.get_logger(__name__)
 

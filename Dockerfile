@@ -63,5 +63,4 @@ USER www-data
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$SERVER_PORT/health || exit 1
 
-ENTRYPOINT ["python3", "src/main.py"]
-
+ENTRYPOINT ["python3", "-m", "src.main"]

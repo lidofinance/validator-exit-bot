@@ -1,16 +1,17 @@
-import structlog
 from typing import cast
 
-from blockchain.contracts.node_operator_registry import NodeOperatorRegistryContract
-from blockchain.contracts.staking_router import StakingRouterContract
-from blockchain.contracts.validator_exit_bus_oracle import (
-    ValidatorExitBusOracleContract,
-)
-from blockchain.contracts.withdrawal_vault import WithdrawalVaultContract
-import variables
-from blockchain.contracts.lido_locator import LidoLocatorContract
+import structlog
 from web3 import Web3
 from web3.module import Module
+
+from src import variables
+from src.blockchain.contracts.lido_locator import LidoLocatorContract
+from src.blockchain.contracts.node_operator_registry import NodeOperatorRegistryContract
+from src.blockchain.contracts.staking_router import StakingRouterContract
+from src.blockchain.contracts.validator_exit_bus_oracle import (
+    ValidatorExitBusOracleContract,
+)
+from src.blockchain.contracts.withdrawal_vault import WithdrawalVaultContract
 
 logger = structlog.get_logger(__name__)
 
