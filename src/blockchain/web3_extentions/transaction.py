@@ -20,7 +20,9 @@ class TransactionUtils(Module):
     w3: Web3
 
     @staticmethod
-    def check(transaction: ContractFunction, value: Wei = Wei(0)) -> bool:
+    def check(transaction: ContractFunction, value: Wei | None = None) -> bool:
+        if value is None:
+            value = Wei(0)
         try:
             call_params = TxParams({})
             if value > 0:
@@ -37,8 +39,10 @@ class TransactionUtils(Module):
         self,
         transaction: ContractFunction,
         timeout_in_blocks: int,
-        value: Wei = Wei(0),
+        value: Wei | None = None,
     ) -> bool:
+        if value is None:
+            value = Wei(0)
         if not variables.ACCOUNT:
             logger.info(
                 {"msg": "Account was not provided. Sending transaction skipped."}
@@ -92,8 +96,10 @@ class TransactionUtils(Module):
     def _estimate_gas(
         transaction: ContractFunction,
         account_address: ChecksumAddress,
-        value: Wei = Wei(0),
+        value: Wei | None = None,
     ) -> int:
+        if value is None:
+            value = Wei(0)
         try:
             tx_params = TxParams({"from": account_address})
             if value > 0:

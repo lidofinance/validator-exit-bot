@@ -1,26 +1,39 @@
 import threading
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import requests
 import structlog
 
+import src.variables as variables
+
 logger = structlog.get_logger(__name__)
+
+_last_pulse = datetime.now()
+
+def pulse():
+    try:
+        requests.get(f'http://localhost:{variables.SERVER_PORT}/pulse/', timeout=10)
+    except requests.exceptions.ConnectionError as error:
+        logger.warning({'msg': 'Healthcheck server is not responding.', 'error': str(error)})
 
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
     """HTTP request handler with a simple health check endpoint."""
 
     def do_GET(self):
-        """Handle GET requests."""
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
+        global _last_pulse
+
+        if self.path == '/pulse/':
+            _last_pulse = datetime.now()
+        if datetime.now() - _last_pulse > timedelta(minutes=10):
+            self.send_response(503)
             self.end_headers()
-            self.wfile.write(b'{"status": "ok"}')
+            self.wfile.write(b'{"metrics": "fail", "reason": "timeout exceeded"}\n')
         else:
-            self.send_response(404)
-            self.send_header("Content-type", "application/json")
+            self.send_response(200)
             self.end_headers()
-            self.wfile.write(b'{"error": "Not Found"}')
+            self.wfile.write(b'{"metrics": "ok", "reason": "ok"}\n')
 
 
 def _run_server(port: int):

@@ -11,7 +11,7 @@ from src.blockchain.constants import SLOT_TIME
 from src.blockchain.typings import Web3
 from src.blockchain.web3_extentions.lido_contracts import LidoContracts
 from src.blockchain.web3_extentions.transaction import TransactionUtils
-from src.health_server import start_health_server
+from src.health_server import pulse, start_health_server
 from src.metrics import metrics
 from src.metrics.metrics import (
     BOT_CYCLE_DURATION,
@@ -93,6 +93,7 @@ def main():
 
     try:
         while True:
+            pulse()
             if ACCOUNT:
                 balance = w3.eth.get_balance(ACCOUNT.address)
                 metrics.ACCOUNT_BALANCE.labels(ACCOUNT.address, w3.eth.chain_id).set(
