@@ -1,0 +1,67 @@
+version: "3.8"
+services:
+  validator-exit-bot:
+    image: lidofinance/validator-exit-bot:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lido-validator-exit-bot
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9000}:${PROMETHEUS_PORT:-9000}"
+      - "127.0.0.1:${SERVER_PORT:-9010}:${SERVER_PORT:-9010}"
+    environment:
+      # Execution Layer
+      - WEB3_RPC_ENDPOINTS=${WEB3_RPC_ENDPOINTS}
+      
+      # Consensus Layer
+      - CONSENSUS_CLIENT_URL=${CONSENSUS_CLIENT_URL:-http://consensus-node:5052}
+      
+      # Lido Contracts
+      - LIDO_LOCATOR=${LIDO_LOCATOR}
+      
+      # Bot Configuration
+      - MODULES_WHITELIST=${MODULES_WHITELIST:-1}
+      - BLOCKS_BETWEEN_EXECUTION=${BLOCKS_BETWEEN_EXECUTION:-25}
+      - SLEEP_INTERVAL_SECONDS=${SLEEP_INTERVAL_SECONDS:-60}
+      - LOOKBACK_DAYS=${LOOKBACK_DAYS:-7}
+      
+      # Transaction Settings
+      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
+      - DRY_RUN=${DRY_RUN:-false}
+      - MIN_PRIORITY_FEE=${MIN_PRIORITY_FEE:-50 mwei}
+      - MAX_PRIORITY_FEE=${MAX_PRIORITY_FEE:-1 gwei}
+      - MAX_GAS_FEE=${MAX_GAS_FEE:-10 gwei}
+      - CONTRACT_GAS_LIMIT=${CONTRACT_GAS_LIMIT:-15000000}
+      - GAS_PRIORITY_FEE_PERCENTILE=${GAS_PRIORITY_FEE_PERCENTILE:-15}
+      
+      # Monitoring
+      - PROMETHEUS_PORT=${PROMETHEUS_PORT:-9000}
+      - SERVER_PORT=${SERVER_PORT:-9010}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:$${SERVER_PORT:-9010}/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
