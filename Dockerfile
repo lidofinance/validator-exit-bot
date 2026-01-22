@@ -50,6 +50,7 @@ WORKDIR /app
 
 # Copy application code
 COPY --chown=www-data:www-data src/ ./src/
+COPY --chown=www-data:www-data scripts/ ./scripts/
 COPY --chown=www-data:www-data interfaces/ ./interfaces/
 
 ENV PROMETHEUS_PORT=9000 \
