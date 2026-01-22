@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell health metrics clean rebuild test test-cov test-watch lint format generate-et-hash generate-veb-data
+.PHONY: help build up down restart logs shell health metrics clean rebuild test test-cov test-watch lint format
 
 # Default target
 help:
@@ -27,10 +27,6 @@ help:
 	@echo "  format      Format code (ruff format + fix imports)"
 	@echo "  run         Run bot locally (loads .env)"
 	@echo "  run-dry     Run bot locally in dry-run mode"
-	@echo ""
-	@echo "Script Generation (Docker):"
-	@echo "  generate-et-hash    Generate Easy Track hash calldata via Docker"
-	@echo "  generate-veb-data   Generate VEB data calldata via Docker"
 
 # Build the Docker image
 build:
@@ -172,54 +168,3 @@ run-dry:
 		exit 1; \
 	fi
 
-# Generate Easy Track hash calldata via Docker
-# Usage: make generate-et-hash VI=123456 [VI2=123457] [KAPI_URL=...] [CL_URL=...]
-generate-et-hash:
-	@if [ -z "$(VI)" ]; then \
-		echo "❌ Error: VI (validator index) is required"; \
-		echo "Usage: make generate-et-hash VI=123456"; \
-		echo "       make generate-et-hash VI=123456 VI2=123457 VI3=123458"; \
-		exit 1; \
-	fi
-	@echo "🔨 Building Docker image..."
-	@docker build -t validator-exit-bot . -q
-	@echo "📊 Generating Easy Track hash calldata..."
-	@KAPI_URL=$${KAPI_URL:-https://keys-api.lido.fi}; \
-	CL_URL=$${CL_URL:-http://host.docker.internal:5052}; \
-	VI_ARGS="--vi $(VI)"; \
-	if [ ! -z "$(VI2)" ]; then VI_ARGS="$$VI_ARGS --vi $(VI2)"; fi; \
-	if [ ! -z "$(VI3)" ]; then VI_ARGS="$$VI_ARGS --vi $(VI3)"; fi; \
-	if [ ! -z "$(VI4)" ]; then VI_ARGS="$$VI_ARGS --vi $(VI4)"; fi; \
-	if [ ! -z "$(VI5)" ]; then VI_ARGS="$$VI_ARGS --vi $(VI5)"; fi; \
-	docker run --rm validator-exit-bot \
-		python3 -m scripts.generate \
-		--kapi-url $$KAPI_URL \
-		--cl-url $$CL_URL \
-		et-hash \
-		$$VI_ARGS
-
-# Generate VEB data calldata via Docker
-# Usage: make generate-veb-data VI=123456 [VI2=123457] [KAPI_URL=...] [CL_URL=...]
-generate-veb-data:
-	@if [ -z "$(VI)" ]; then \
-		echo "❌ Error: VI (validator index) is required"; \
-		echo "Usage: make generate-veb-data VI=123456"; \
-		echo "       make generate-veb-data VI=123456 VI2=123457 VI3=123458"; \
-		exit 1; \
-	fi
-	@echo "🔨 Building Docker image..."
-	@docker build -t validator-exit-bot . -q
-	@echo "📊 Generating VEB data calldata..."
-	@KAPI_URL=$${KAPI_URL:-https://keys-api.lido.fi}; \
-	CL_URL=$${CL_URL:-http://host.docker.internal:5052}; \
-	VI_ARGS="--vi $(VI)"; \
-	if [ ! -z "$(VI2)" ]; then VI_ARGS="$$VI_ARGS --vi $(VI2)"; fi; \
-	if [ ! -z "$(VI3)" ]; then VI_ARGS="$$VI_ARGS --vi $(VI3)"; fi; \
-	if [ ! -z "$(VI4)" ]; then VI_ARGS="$$VI_ARGS --vi $(VI4)"; fi; \
-	if [ ! -z "$(VI5)" ]; then VI_ARGS="$$VI_ARGS --vi $(VI5)"; fi; \
-	docker run --rm validator-exit-bot \
-		python3 -m scripts.generate \
-		--kapi-url $$KAPI_URL \
-		--cl-url $$CL_URL \
-		veb-data \
-		$$VI_ARGS

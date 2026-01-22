@@ -1,62 +1,53 @@
 # Easy Track Validator Exit Guide (Docker)
 
-This guide shows how to generate validator exit calldata for Easy Track governance **using Docker only** - no Python or Poetry installation required!
+This guide shows how to generate validator exit calldata for Easy Track governance using **Docker** or **Poetry**.
 
 ## Prerequisites
 
-- Docker installed ([Get Docker](https://docs.docker.com/get-docker/))
+- Docker installed ([Get Docker](https://docs.docker.com/get-docker/)) OR Poetry installed
 - Access to a Consensus Layer (Beacon Chain) node
 - Validator index(es) you want to exit
 
-## Quick Start
+---
 
-### Option A: Using Makefile (Easiest!)
+## Option A: Using Poetry
 
-```bash
-# Generate Easy Track hash
-make generate-et-hash VI=123456
-
-# Generate VEB data
-make generate-veb-data VI=123456
-
-# Multiple validators
-make generate-et-hash VI=123456 VI2=123457 VI3=123458
-```
-
-**That's it!** The Makefile handles building the image and running the command. ✨
-
-### Option B: Using Docker Directly
-
-### 1. Build the Docker Image
+### 1. Install Dependencies
 
 ```bash
-git clone <your-repo-url>
 cd validator-exit-bot
-docker build -t validator-exit-bot .
+poetry install --with dev
 ```
 
 ### 2. Generate Easy Track Hash Calldata
 
 ```bash
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
+poetry run python -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
+  --cl-url CL_NODE_URL \
   et-hash \
-  --vi <VALIDATOR_INDEX>
+  --vi <CL_VALIDATOR_INDEX>
 ```
 
 **Example:**
 ```bash
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
+poetry run python -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
+  --cl-url CL_NODE_URL \
   et-hash \
   --vi 123456
 ```
 
-**Output:** Hex-encoded calldata (copy this entire string)
+**Multiple validators:**
+```bash
+poetry run python -m scripts.generate \
+  --kapi-url https://keys-api.lido.fi \
+  --cl-url CL_NODE_URL \
+  et-hash \
+  --vi 123456 \
+  --vi 123457 \
+  --vi 123458
+```
 
 ### 3. Submit to Easy Track
 
@@ -64,37 +55,35 @@ docker run --rm validator-exit-bot \
 2. Connect your wallet
 3. Click **"Start motion"**
 4. Select motion type: **"[Curated] Submit Exit hashes"**
-5. Paste the hex calldata from step 2 into the data field
+5. Paste the hex calldata from step 2
 6. Review and confirm the transaction
 
 ### 4. Wait for Easy Track Approval
 
-After the Easy Track motion passes, you'll need to reveal the validator data.
+After the Easy Track motion passes (can take days), proceed to reveal the validator data.
 
 ### 5. Generate VEB Data Reveal Calldata
 
 ```bash
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
+poetry run python -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
+  --cl-url CL_NODE_URL \
   veb-data \
-  --vi <VALIDATOR_INDEX>
+  --vi <CL_VALIDATOR_INDEX>
 ```
 
 **Example:**
 ```bash
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
+poetry run python -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
+  --cl-url CL_NODE_URL \
   veb-data \
   --vi 123456
 ```
 
 ### 6. Submit Data to VEBO Contract
 
-1. Go to Validator Exit Bus Oracle: https://etherscan.io/address/0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e#writeProxyContract#F15
+1. Go to **Validator Exit Bus Oracle**: https://etherscan.io/address/0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e#writeProxyContract#F15
 2. Connect your wallet
 3. Find function **`submitExitRequestsData`** (function #15)
 4. Fill in:
@@ -104,90 +93,126 @@ docker run --rm validator-exit-bot \
 
 ---
 
-## Multiple Validators
+## Option B: Using Docker
 
-To exit multiple validators, add multiple `--vi` parameters:
+### 1. Build the Docker Image
 
 ```bash
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
+cd validator-exit-bot
+docker build -t validator-exit-bot .
+```
+
+### 2. Generate Easy Track Hash Calldata
+
+```bash
+docker run --rm --entrypoint python3 validator-exit-bot \
+  -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
+  --cl-url CL_NODE_URL \
+  et-hash \
+  --vi <CL_VALIDATOR_INDEX>
+```
+
+**Example:**
+```bash
+docker run --rm --entrypoint python3 validator-exit-bot \
+  -m scripts.generate \
+  --kapi-url https://keys-api.lido.fi \
+  --cl-url CL_NODE_URL \
+  et-hash \
+  --vi 123456
+```
+
+**Multiple validators:**
+```bash
+docker run --rm --entrypoint python3 validator-exit-bot \
+  -m scripts.generate \
+  --kapi-url https://keys-api.lido.fi \
+  --cl-url CL_NODE_URL \
   et-hash \
   --vi 123456 \
   --vi 123457 \
   --vi 123458
 ```
 
-**Important:** Use the **same validator indexes** for both `et-hash` and `veb-data` commands!
+### 3. Submit to Easy Track
+
+1. Go to **Easy Track UI**: https://easytrack.lido.fi/
+2. Connect your wallet
+3. Click **"Start motion"**
+4. Select motion type: **"[Curated] Submit Exit hashes"**
+5. Paste the hex calldata from step 2
+6. Review and confirm the transaction
+
+### 4. Wait for Easy Track Approval
+
+After the Easy Track motion passes (can take days), proceed to reveal the validator data.
+
+### 5. Generate VEB Data Reveal Calldata
+
+```bash
+docker run --rm --entrypoint python3 validator-exit-bot \
+  -m scripts.generate \
+  --kapi-url https://keys-api.lido.fi \
+  --cl-url http://host.docker.internal:5052 \
+  veb-data \
+  --vi <CL_VALIDATOR_INDEX>
+```
+
+**Example:**
+```bash
+docker run --rm --entrypoint python3 validator-exit-bot \
+  -m scripts.generate \
+  --kapi-url https://keys-api.lido.fi \
+  --cl-url CL_NODE_URL \
+  veb-data \
+  --vi 123456
+```
+
+### 6. Submit Data to VEBO Contract
+
+1. Go to **Validator Exit Bus Oracle**: https://etherscan.io/address/0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e#writeProxyContract#F15
+2. Connect your wallet
+3. Find function **`submitExitRequestsData`** (function #15)
+4. Fill in:
+   - `data`: Paste the hex calldata from step 5
+   - `dataFormat`: `1`
+5. Click "Write" and confirm the transaction
 
 ---
 
 ## Network Configuration
 
-### Mainnet (default)
+### Mainnet
 ```bash
 --kapi-url https://keys-api.lido.fi
---cl-url http://host.docker.internal:5052
+--cl-url CL_NODE_URL
 ```
 
 ### Holesky Testnet
 ```bash
 --kapi-url https://keys-api-holesky.testnet.fi
---cl-url https://holesky.beaconcha.in
-```
-
-### Custom Node
-If you're running a local Beacon node, use:
-- **Linux/Mac:** `http://host.docker.internal:5052`
-- **Windows:** `http://host.docker.internal:5052`
-
-This special hostname allows Docker to access your host machine's localhost.
-
----
-
-## Debug Mode
-
-To see detailed execution steps, add `--debug`:
-
-```bash
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
-  --debug \
-  --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
-  et-hash \
-  --vi 123456
+--cl-url CL_NODE_URL
 ```
 
 ---
 
-## Save Output to File
+## Important Notes
 
-### Linux/Mac
-```bash
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
-  --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
-  et-hash \
-  --vi 123456 > calldata.txt
-```
+### Docker-Specific
 
-### Windows (PowerShell)
-```powershell
-docker run --rm validator-exit-bot python3 -m scripts.generate --kapi-url https://keys-api.lido.fi --cl-url http://host.docker.internal:5052 et-hash --vi 123456 | Out-File -Encoding utf8 calldata.txt
-```
+- **`--entrypoint python3`**: Required to override the bot's default entrypoint
+- **`host.docker.internal`**: Use this instead of `localhost` to access your host machine's services from inside Docker
+
+### General
+
+- **Same validator indexes**: Use the same `--vi` values for both `et-hash` and `veb-data` commands
+- **Order doesn't matter**: The script automatically sorts validators by `(module_id, operator_id, validator_index)`
+- **Debug mode**: Add `--debug` after `scripts.generate` to see detailed execution logs
 
 ---
 
 ## Troubleshooting
-
-### Error: "Connection refused"
-
-**Problem:** Docker can't reach your local Beacon node.
-
-**Solution:** Use `http://host.docker.internal:5052` instead of `http://localhost:5052`
 
 ### Error: "Validator index not found"
 
@@ -206,9 +231,7 @@ docker run --rm validator-exit-bot python3 -m scripts.generate --kapi-url https:
 
 ### Docker Build Fails
 
-**Problem:** Build errors during `docker build`.
-
-**Solution:** Ensure you have the latest code and Docker version:
+**Solution:**
 ```bash
 git pull
 docker system prune -a  # Clean old images
@@ -217,106 +240,99 @@ docker build -t validator-exit-bot .
 
 ---
 
-## Using Pre-built Docker Image (Optional)
+## Save Output to File
 
-If your team publishes Docker images to a registry, users can skip the build step:
-
+### Linux/Mac
 ```bash
-# Pull the image
-docker pull ghcr.io/your-org/validator-exit-bot:latest
-
-# Run directly
-docker run --rm ghcr.io/your-org/validator-exit-bot:latest \
-  python3 -m scripts.generate \
+# Poetry
+poetry run python -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
+  --cl-url CL_NODE_URL \
   et-hash \
-  --vi 123456
+  --vi 123456 > et_calldata.txt
+
+# Docker
+docker run --rm --entrypoint python3 validator-exit-bot \
+  -m scripts.generate \
+  --kapi-url https://keys-api.lido.fi \
+  --cl-url CL_NODE_URL \
+  et-hash \
+  --vi 123456 > et_calldata.txt
+```
+
+### Windows (PowerShell)
+```powershell
+# Docker
+docker run --rm --entrypoint python3 validator-exit-bot -m scripts.generate --kapi-url https://keys-api.lido.fi --cl-url CL_NODE_URL et-hash --vi 123456 | Out-File -Encoding utf8 et_calldata.txt
 ```
 
 ---
 
 ## Complete Workflow Example
 
-Here's a complete example for exiting validator `123456`:
-
-### Using Makefile (Recommended)
+### Using Poetry
 
 ```bash
 # Step 1: Generate ET hash calldata
-make generate-et-hash VI=123456 > et_calldata.txt
+poetry run python -m scripts.generate \
+  --kapi-url https://keys-api.lido.fi \
+  --cl-url CL_NODE_URL \
+  et-hash \
+  --vi 123456 > et_calldata.txt
 
-# Step 2: Submit to Easy Track (manual - use Easy Track UI)
+# Step 2: Submit to Easy Track UI
 # → Go to https://easytrack.lido.fi/
 # → Start motion: "[Curated] Submit Exit hashes"
-# → Paste the calldata from et_calldata.txt
+# → Paste calldata from et_calldata.txt
 
 # Step 3: Wait for Easy Track approval (can take days)
 
 # Step 4: Generate VEB data calldata
-make generate-veb-data VI=123456 > veb_calldata.txt
+poetry run python -m scripts.generate \
+  --kapi-url https://keys-api.lido.fi \
+  --cl-url CL_NODE_URL \
+  veb-data \
+  --vi 123456 > veb_calldata.txt
 
-# Step 5: Submit to VEBO (manual - use Etherscan)
-# → Go to VEBO contract
-# → Call submitExitRequestsData with the calldata from veb_calldata.txt
+# Step 5: Submit to VEBO contract
+# → Go to https://etherscan.io/address/0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e#writeProxyContract#F15
+# → Call submitExitRequestsData with calldata from veb_calldata.txt
 # → Set dataFormat = 1
 ```
 
-### Using Docker Directly
+### Using Docker
 
 ```bash
 # Step 1: Build image (one-time)
 docker build -t validator-exit-bot .
 
 # Step 2: Generate ET hash calldata
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
+docker run --rm --entrypoint python3 validator-exit-bot \
+  -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
+  --cl-url CL_NODE_URL \
   et-hash \
   --vi 123456 > et_calldata.txt
 
-# Step 3: Submit to Easy Track (manual - use Easy Track UI)
+# Step 3: Submit to Easy Track UI
 # → Go to https://easytrack.lido.fi/
 # → Start motion: "[Curated] Submit Exit hashes"
-# → Paste the calldata from et_calldata.txt
+# → Paste calldata from et_calldata.txt
 
 # Step 4: Wait for Easy Track approval (can take days)
 
 # Step 5: Generate VEB data calldata
-docker run --rm validator-exit-bot \
-  python3 -m scripts.generate \
+docker run --rm --entrypoint python3 validator-exit-bot \
+  -m scripts.generate \
   --kapi-url https://keys-api.lido.fi \
-  --cl-url http://host.docker.internal:5052 \
+  --cl-url CL_NODE_URL \
   veb-data \
   --vi 123456 > veb_calldata.txt
 
-# Step 6: Submit to VEBO (manual - use Etherscan)
-# → Go to VEBO contract
-# → Call submitExitRequestsData with the calldata from veb_calldata.txt
+# Step 6: Submit to VEBO contract
+# → Go to https://etherscan.io/address/0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e#writeProxyContract#F15
+# → Call submitExitRequestsData with calldata from veb_calldata.txt
 # → Set dataFormat = 1
-```
-
----
-
-## Makefile Commands Reference
-
-The project includes convenient Makefile targets for easier usage:
-
-```bash
-# Generate Easy Track hash calldata
-make generate-et-hash VI=123456
-
-# Generate VEB data calldata
-make generate-veb-data VI=123456
-
-# Multiple validators (up to 5 via VI, VI2, VI3, VI4, VI5)
-make generate-et-hash VI=123456 VI2=123457 VI3=123458
-
-# Custom endpoints
-make generate-et-hash VI=123456 \
-  KAPI_URL=https://keys-api-holesky.testnet.fi \
-  CL_URL=https://holesky-beacon.example.com
 ```
 
 ---
@@ -325,5 +341,4 @@ make generate-et-hash VI=123456 \
 
 - [Easy Track UI](https://easytrack.lido.fi/) - Submit motions here
 - [Easy Track Documentation](https://docs.lido.fi/guides/easy-track-guide/)
-- [Validator Exit Bus Oracle](https://docs.lido.fi/contracts/validator-exit-bus-oracle/)
 - [Docker Documentation](https://docs.docker.com/)
