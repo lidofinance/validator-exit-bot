@@ -14,6 +14,7 @@ from src.blockchain.web3_extentions.transaction import TransactionUtils
 from src.metrics.metrics import (
     EVENTS_PROCESSED,
     PENDING_VALIDATORS,
+    UNEXPECTED_EXCEPTIONS,
     VALIDATORS_CHECKED,
     VALIDATORS_TRIGGERED,
 )
@@ -360,6 +361,7 @@ class TriggerExitBot:
             val_index = validator["valIndex"]
             validator_index = validator["index"]
 
+            is_exited, cl_error = self.cl_client.is_validator_exited(pubkey_hex)
             logger.info(
                 {
                     "msg": "Checking validator",
@@ -371,13 +373,24 @@ class TriggerExitBot:
                 }
             )
 
-            # Check if validator is already exited
-            is_exited = self.cl_client.is_validator_exited(pubkey_hex)
+            if cl_error:
+                logger.error(
+                    {
+                        "msg": "CL API error, skipping validator for this cycle",
+                        "pubkey": pubkey_hex,
+                        "exit_data_index": validator_index,
+                    }
+                )
+                UNEXPECTED_EXCEPTIONS.labels(type="cl_api_error").inc()
+                status_counts[(str(module_id), "cl_api_error")] = (
+                    status_counts.get((str(module_id), "cl_api_error"), 0) + 1
+                )
+                continue
 
             if is_exited:
                 logger.info(
                     {
-                        "msg": "Validator is already exited, removing from state",
+                        "msg": "Validator is already exited/exiting, removing from state",
                         "pubkey": pubkey_hex,
                         "exit_data_index": validator_index,
                     }
