@@ -363,12 +363,11 @@ class TriggerExitBot:
             logger.info(
                 {
                     "msg": "Checking validator",
-                    "pubkey": pubkey_hex[:20]
-                    + "...",  # Log first part of pubkey for brevity
+                    "pubkey": pubkey_hex,
                     "module_id": module_id,
-                    "node_op_id": node_op_id,
+                    "node_operator_id": node_op_id,
                     "val_index": val_index,
-                    "validator_index": validator_index,
+                    "exit_data_index": validator_index,
                 }
             )
 
@@ -379,8 +378,8 @@ class TriggerExitBot:
                 logger.info(
                     {
                         "msg": "Validator is already exited, removing from state",
-                        "pubkey": pubkey_hex[:20] + "...",
-                        "validator_index": validator_index,
+                        "pubkey": pubkey_hex,
+                        "exit_data_index": validator_index,
                     }
                 )
                 validators_to_remove.append(validator)
@@ -395,7 +394,7 @@ class TriggerExitBot:
                     {
                         "msg": "Module not in whitelist, skipping",
                         "module_id": module_id,
-                        "validator_index": validator_index,
+                        "exit_data_index": validator_index,
                     }
                 )
                 status_counts[(str(module_id), "skipped_module")] = (
@@ -413,7 +412,7 @@ class TriggerExitBot:
                     {
                         "msg": "Node operator registry not found for module",
                         "module_id": module_id,
-                        "validator_index": validator_index,
+                        "exit_data_index": validator_index,
                     }
                 )
                 continue
@@ -426,8 +425,11 @@ class TriggerExitBot:
                 logger.info(
                     {
                         "msg": "Validator is reported but not exited, adding to trigger list",
-                        "pubkey": pubkey_hex[:20] + "...",
-                        "validator_index": validator_index,
+                        "pubkey": pubkey_hex,
+                        "module_id": module_id,
+                        "node_operator_id": node_op_id,
+                        "val_index": val_index,
+                        "exit_data_index": validator_index,
                     }
                 )
                 validators_to_trigger.append(validator)
@@ -442,8 +444,8 @@ class TriggerExitBot:
                 logger.info(
                     {
                         "msg": "Validator exiting key not reported yet",
-                        "pubkey": pubkey_hex[:20] + "...",
-                        "validator_index": validator_index,
+                        "pubkey": pubkey_hex,
+                        "exit_data_index": validator_index,
                     }
                 )
                 status_counts[(str(module_id), "not_reported")] = (
