@@ -41,8 +41,8 @@ Create a `.env` file in the project root with the following variables:
 # Required: Ethereum RPC endpoints (comma-separated for fallback)
 WEB3_RPC_ENDPOINTS=https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY,https://mainnet.infura.io/v3/YOUR_KEY
 
-# Required: Consensus Layer Beacon API endpoints (comma-separated)
-CL_RPC_ENDPOINTS=https://beacon-node.example.com,https://backup-beacon.example.com
+# Required: Consensus Layer Beacon API endpoint
+CONSENSUS_CLIENT_URL=https://beacon-node.example.com
 
 # Optional: Account private key (required for sending transactions)
 # Without this, the bot will run in monitoring mode only
@@ -275,7 +275,7 @@ Each exit request contains:
 ```bash
 # Basic bot operation with minimal configuration
 WEB3_RPC_ENDPOINTS=https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY \
-CL_RPC_ENDPOINTS=https://beacon-node.example.com \
+CONSENSUS_CLIENT_URL=https://beacon-node.example.com \
 ACCOUNT=0x1234567890abcdef... \
 poetry run python -m src.main
 ```

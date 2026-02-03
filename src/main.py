@@ -22,7 +22,7 @@ from src.trigger_exit_bot import TriggerExitBot
 from src.utils.cl_client import CLClient
 from src.variables import (
     ACCOUNT,
-    CL_RPC_ENDPOINTS,
+    CONSENSUS_CLIENT_URL,
     LOG_LEVEL,
     LOOKBACK_DAYS,
     PROMETHEUS_PORT,
@@ -82,7 +82,7 @@ def main():
     web3_multi_provider.init_metrics(MetricsConfig(namespace=PROMETHEUS_PREFIX))
 
     w3 = create_web3(WEB3_RPC_ENDPOINTS)
-    cl_client = create_cl_client(CL_RPC_ENDPOINTS)
+    cl_client = create_cl_client(CONSENSUS_CLIENT_URL)
 
     # Initialize TriggerExitBot
     bot = TriggerExitBot(w3, cl_client)
