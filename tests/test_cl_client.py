@@ -1,8 +1,9 @@
 """Unit tests for CLClient."""
 
+from unittest.mock import Mock, patch
+
 import pytest
 import requests
-from unittest.mock import Mock, patch
 from eth_typing import HexStr
 
 from src.utils.cl_client import CLClient
