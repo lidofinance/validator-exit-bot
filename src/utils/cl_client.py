@@ -10,7 +10,14 @@ logger = structlog.get_logger(__name__)
 
 class CLClient:
     def __init__(self, url: str):
-        self.url = url
+        self.url = url.rstrip("/") + "/"
+
+    @staticmethod
+    def _ensure_0x_prefix(pubkey: HexStr) -> str:
+        """Ensure pubkey has 0x prefix for API calls."""
+        if not pubkey.startswith("0x"):
+            return f"0x{pubkey}"
+        return pubkey
 
     def get_validators_by_indexes(self) -> dict[int, HexStr]:
         validators = self.get_all_validators()
@@ -20,14 +27,15 @@ class CLClient:
 
     def get_all_validators(self) -> list[dict[str, Any]]:
         response = requests.get(
-            urljoin(self.url, "/eth/v1/beacon/states/head/validators"), timeout=60
+            urljoin(self.url, "eth/v1/beacon/states/head/validators"), timeout=60
         )
         response.raise_for_status()
         return response.json()["data"]
 
     def get_validator_index_by_pubkey(self, pub_key: HexStr) -> int:
+        pubkey_with_prefix = self._ensure_0x_prefix(pub_key)
         response = requests.get(
-            urljoin(self.url, f"/eth/v1/beacon/states/head/validators/{pub_key}"),
+            urljoin(self.url, f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}"),
             timeout=10,
         )
         response.raise_for_status()
@@ -46,8 +54,9 @@ class CLClient:
         Returns None if validator not found, otherwise returns validator data dict.
         """
         try:
+            pubkey_with_prefix = self._ensure_0x_prefix(pub_key)
             response = requests.get(
-                urljoin(self.url, f"/eth/v1/beacon/states/head/validators/{pub_key}"),
+                urljoin(self.url, f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}"),
                 timeout=10,
             )
             response.raise_for_status()
@@ -57,7 +66,7 @@ class CLClient:
                 logger.warning(
                     {
                         "msg": "CL API returned error for validator",
-                        "pubkey": pub_key[:20] + "...",
+                        "pubkey": pub_key,
                         "error": data.get("error"),
                     }
                 )
@@ -68,7 +77,7 @@ class CLClient:
             logger.error(
                 {
                     "msg": "Failed to get validator from CL",
-                    "pubkey": pub_key[:20] + "...",
+                    "pubkey": pub_key,
                     "error": str(e),
                     "cl_url": self.url,
                 }
