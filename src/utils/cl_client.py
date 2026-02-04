@@ -35,7 +35,9 @@ class CLClient:
     def get_validator_index_by_pubkey(self, pub_key: HexStr) -> int:
         pubkey_with_prefix = self._ensure_0x_prefix(pub_key)
         response = requests.get(
-            urljoin(self.url, f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}"),
+            urljoin(
+                self.url, f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}"
+            ),
             timeout=10,
         )
         response.raise_for_status()
@@ -56,7 +58,10 @@ class CLClient:
         try:
             pubkey_with_prefix = self._ensure_0x_prefix(pub_key)
             response = requests.get(
-                urljoin(self.url, f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}"),
+                urljoin(
+                    self.url,
+                    f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}",
+                ),
                 timeout=10,
             )
             response.raise_for_status()
