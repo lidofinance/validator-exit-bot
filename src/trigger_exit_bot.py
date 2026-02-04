@@ -14,6 +14,7 @@ from src.blockchain.web3_extentions.transaction import TransactionUtils
 from src.metrics.metrics import (
     EVENTS_PROCESSED,
     PENDING_VALIDATORS,
+    UNEXPECTED_EXCEPTIONS,
     VALIDATORS_CHECKED,
     VALIDATORS_TRIGGERED,
 )
@@ -360,27 +361,38 @@ class TriggerExitBot:
             val_index = validator["valIndex"]
             validator_index = validator["index"]
 
+            is_exited, cl_error = self.cl_client.is_validator_exited(pubkey_hex)
             logger.info(
                 {
                     "msg": "Checking validator",
-                    "pubkey": pubkey_hex[:20]
-                    + "...",  # Log first part of pubkey for brevity
+                    "pubkey": pubkey_hex,
                     "module_id": module_id,
-                    "node_op_id": node_op_id,
+                    "node_operator_id": node_op_id,
                     "val_index": val_index,
-                    "validator_index": validator_index,
+                    "exit_data_index": validator_index,
                 }
             )
 
-            # Check if validator is already exited
-            is_exited = self.cl_client.is_validator_exited(pubkey_hex)
+            if cl_error:
+                logger.error(
+                    {
+                        "msg": "CL API error, skipping validator for this cycle",
+                        "pubkey": pubkey_hex,
+                        "exit_data_index": validator_index,
+                    }
+                )
+                UNEXPECTED_EXCEPTIONS.labels(type="cl_api_error").inc()
+                status_counts[(str(module_id), "cl_api_error")] = (
+                    status_counts.get((str(module_id), "cl_api_error"), 0) + 1
+                )
+                continue
 
             if is_exited:
                 logger.info(
                     {
-                        "msg": "Validator is already exited, removing from state",
-                        "pubkey": pubkey_hex[:20] + "...",
-                        "validator_index": validator_index,
+                        "msg": "Validator is already exited/exiting, removing from state",
+                        "pubkey": pubkey_hex,
+                        "exit_data_index": validator_index,
                     }
                 )
                 validators_to_remove.append(validator)
@@ -395,7 +407,7 @@ class TriggerExitBot:
                     {
                         "msg": "Module not in whitelist, skipping",
                         "module_id": module_id,
-                        "validator_index": validator_index,
+                        "exit_data_index": validator_index,
                     }
                 )
                 status_counts[(str(module_id), "skipped_module")] = (
@@ -413,7 +425,7 @@ class TriggerExitBot:
                     {
                         "msg": "Node operator registry not found for module",
                         "module_id": module_id,
-                        "validator_index": validator_index,
+                        "exit_data_index": validator_index,
                     }
                 )
                 continue
@@ -426,8 +438,11 @@ class TriggerExitBot:
                 logger.info(
                     {
                         "msg": "Validator is reported but not exited, adding to trigger list",
-                        "pubkey": pubkey_hex[:20] + "...",
-                        "validator_index": validator_index,
+                        "pubkey": pubkey_hex,
+                        "module_id": module_id,
+                        "node_operator_id": node_op_id,
+                        "val_index": val_index,
+                        "exit_data_index": validator_index,
                     }
                 )
                 validators_to_trigger.append(validator)
@@ -442,8 +457,8 @@ class TriggerExitBot:
                 logger.info(
                     {
                         "msg": "Validator exiting key not reported yet",
-                        "pubkey": pubkey_hex[:20] + "...",
-                        "validator_index": validator_index,
+                        "pubkey": pubkey_hex,
+                        "exit_data_index": validator_index,
                     }
                 )
                 status_counts[(str(module_id), "not_reported")] = (

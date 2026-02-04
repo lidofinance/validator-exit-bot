@@ -11,8 +11,8 @@ logger = structlog.get_logger(__name__)
 # EL node
 WEB3_RPC_ENDPOINTS = os.getenv("WEB3_RPC_ENDPOINTS", "").split(",")
 
-# CL node
-CL_RPC_ENDPOINTS = os.getenv("CL_RPC_ENDPOINTS", "").split(",")
+# Consensus Layer Beacon Node URL
+CONSENSUS_CLIENT_URL = os.getenv("CONSENSUS_CLIENT_URL", "").split(",")
 
 # Account private key
 WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY", None)
@@ -99,7 +99,18 @@ PUBLIC_ENV_VARS = {
 
 PRIVATE_ENV_VARS = {
     "WEB3_RPC_ENDPOINTS": WEB3_RPC_ENDPOINTS,
+    "CONSENSUS_CLIENT_URL": CONSENSUS_CLIENT_URL,
     "WALLET_PRIVATE_KEY": WALLET_PRIVATE_KEY,
 }
 
 assert not set(PRIVATE_ENV_VARS.keys()).intersection(set(PUBLIC_ENV_VARS.keys()))
+
+# Validate required configuration
+if not WEB3_RPC_ENDPOINTS or WEB3_RPC_ENDPOINTS == [""]:
+    raise ValueError("WEB3_RPC_ENDPOINTS environment variable is required")
+
+if not CONSENSUS_CLIENT_URL or CONSENSUS_CLIENT_URL == [""]:
+    raise ValueError(
+        "CONSENSUS_CLIENT_URL environment variable is required. "
+        "Example: CONSENSUS_CLIENT_URL=http://localhost:5052"
+    )
