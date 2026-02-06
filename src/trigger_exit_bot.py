@@ -537,6 +537,17 @@ class TriggerExitBot:
         fee_per_request = self.w3.lido.withdrawal_vault.get_withdrawal_request_fee()
         total_fee: Wei = Wei(fee_per_request * len(validators_to_trigger))
 
+        if fee_per_request >= variables.MAX_WITHDRAWAL_FEE_PER_VALIDATOR:
+            logger.warning(
+                {
+                    "msg": "Fee per request too high, skipping trigger",
+                    "fee_per_request": fee_per_request,
+                    "max_fee_per_validator": variables.MAX_WITHDRAWAL_FEE_PER_VALIDATOR,
+                    "validators_count": len(validators_to_trigger),
+                }
+            )
+            return
+
         logger.info(
             {
                 "msg": "Building trigger_exits transaction",
