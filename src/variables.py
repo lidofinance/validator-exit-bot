@@ -77,7 +77,7 @@ SLEEP_INTERVAL_SECONDS = int(os.getenv("SLEEP_INTERVAL_SECONDS", 60))
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", 7))
 
 MAX_WITHDRAWAL_FEE_PER_VALIDATOR = Web3.to_wei(
-    *os.getenv("MAX_WITHDRAWAL_FEE_PER_VALIDATOR", "0.00005 ether").split(" ")
+    *os.getenv("MAX_WITHDRAWAL_FEE_PER_VALIDATOR", "5 gwei").split(" ")
 )
 
 # All non-private env variables to the logs in main
