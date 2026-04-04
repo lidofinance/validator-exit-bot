@@ -14,7 +14,7 @@ readme = "README.md"
 python = ">=3.12,<4"
 prometheus-client = "0.21.1"
 web3-multi-provider = { version = "^2.2.0", extras = ["metrics"] }
-web3 = "^7.0.0"
+web3 = "^7.15.0"
 structlog = "^24.1.0"
 click = "^8.1.8"
 eth-typing = "^5.0.0"
