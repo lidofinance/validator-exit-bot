@@ -42,7 +42,9 @@ def _get_pubkey_offset_in_entry(data_format: int) -> int:
     return METADATA_LENGTH  # 16
 
 
-def unpack_exit_request(exit_data: bytes, index: int, data_format: int = DATA_FORMAT_LIST) -> dict[str, Any]:
+def unpack_exit_request(
+    exit_data: bytes, index: int, data_format: int = DATA_FORMAT_LIST
+) -> dict[str, Any]:
     """
     Unpack a single exit request from packed data using local Python implementation.
 
@@ -92,8 +94,8 @@ def unpack_exit_request(exit_data: bytes, index: int, data_format: int = DATA_FO
     data_without_pubkey = int.from_bytes(metadata_bytes, byteorder="big")
 
     # Extract fields using bit shifting (same as Solidity, LSB-first order)
-    val_index = data_without_pubkey & 0xFFFFFFFFFFFFFFFF       # lowest 64 bits
-    node_op_id = (data_without_pubkey >> 64) & 0xFFFFFFFFFF    # next 40 bits
+    val_index = data_without_pubkey & 0xFFFFFFFFFFFFFFFF  # lowest 64 bits
+    node_op_id = (data_without_pubkey >> 64) & 0xFFFFFFFFFF  # next 40 bits
     module_id = (data_without_pubkey >> (64 + 40)) & 0xFFFFFF  # next 24 bits
 
     result: dict[str, Any] = {
@@ -106,7 +108,9 @@ def unpack_exit_request(exit_data: bytes, index: int, data_format: int = DATA_FO
     # Extract keyIndex for format 2
     if data_format == DATA_FORMAT_LIST_WITH_KEY_INDEX:
         key_index_offset = item_offset + METADATA_LENGTH
-        key_index_bytes = exit_data[key_index_offset : key_index_offset + KEY_INDEX_LENGTH]
+        key_index_bytes = exit_data[
+            key_index_offset : key_index_offset + KEY_INDEX_LENGTH
+        ]
         result["keyIndex"] = int.from_bytes(key_index_bytes, byteorder="big")
 
     # Extract pubkey (48 bytes)
@@ -116,7 +120,9 @@ def unpack_exit_request(exit_data: bytes, index: int, data_format: int = DATA_FO
     return result
 
 
-def decode_all_validators(exit_data: bytes, data_format: int = DATA_FORMAT_LIST) -> list[dict[str, Any]]:
+def decode_all_validators(
+    exit_data: bytes, data_format: int = DATA_FORMAT_LIST
+) -> list[dict[str, Any]]:
     """
     Decode all validators from packed exit data using local Python implementation.
 
@@ -153,7 +159,9 @@ def decode_all_validators(exit_data: bytes, data_format: int = DATA_FORMAT_LIST)
     return validators
 
 
-def calculate_requests_count(exit_data: bytes, data_format: int = DATA_FORMAT_LIST) -> int:
+def calculate_requests_count(
+    exit_data: bytes, data_format: int = DATA_FORMAT_LIST
+) -> int:
     """
     Calculate the number of validators in packed exit data.
 
