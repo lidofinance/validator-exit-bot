@@ -9,73 +9,132 @@ from typing import Any
 
 # Constants from Solidity contract
 PUBLIC_KEY_LENGTH = 48  # bytes
-PACKED_REQUEST_LENGTH = 64  # 16 bytes metadata + 48 bytes pubkey + 5 bytes padding
+
+# DATA_FORMAT_LIST = 1: 64 bytes per entry
+#   MSB <----------------------------------------------- LSB
+#   |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
+#   |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
+DATA_FORMAT_LIST = 1
+PACKED_REQUEST_LENGTH_V1 = 64  # 3 + 5 + 8 + 48
+
+# DATA_FORMAT_LIST_WITH_KEY_INDEX = 2: 72 bytes per entry
+#   MSB <--------------------------------------------------------------- LSB
+#   |  3 bytes   |  5 bytes   |     8 bytes      |   8 bytes  |    48 bytes     |
+#   |  moduleId  |  nodeOpId  |  validatorIndex  |  keyIndex  | validatorPubkey |
+DATA_FORMAT_LIST_WITH_KEY_INDEX = 2
+PACKED_REQUEST_LENGTH_V2 = 72  # 3 + 5 + 8 + 8 + 48
+
+METADATA_LENGTH = 16  # 3 + 5 + 8 bytes (moduleId + nodeOpId + validatorIndex)
+KEY_INDEX_LENGTH = 8  # bytes, only in format 2
 
 
-def unpack_exit_request(exit_data: bytes, index: int) -> dict[str, Any]:
+SUPPORTED_DATA_FORMATS = (DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX)
+
+
+def _get_packed_request_length(data_format: int) -> int:
+    """Return the byte size of a single packed exit request for the given data format.
+
+    Raises:
+        ValueError: If data_format is not a recognised format constant.
+    """
+    if data_format == DATA_FORMAT_LIST:
+        return PACKED_REQUEST_LENGTH_V1
+    if data_format == DATA_FORMAT_LIST_WITH_KEY_INDEX:
+        return PACKED_REQUEST_LENGTH_V2
+    raise ValueError(
+        f"Unknown data_format {data_format!r}. "
+        f"Supported formats: {SUPPORTED_DATA_FORMATS}"
+    )
+
+
+def _get_pubkey_offset_in_entry(data_format: int) -> int:
+    """Return the byte offset of the pubkey within a single packed entry."""
+    if data_format == DATA_FORMAT_LIST_WITH_KEY_INDEX:
+        return METADATA_LENGTH + KEY_INDEX_LENGTH  # 24
+    return METADATA_LENGTH  # 16
+
+
+def unpack_exit_request(
+    exit_data: bytes, index: int, data_format: int = DATA_FORMAT_LIST
+) -> dict[str, Any]:
     """
     Unpack a single exit request from packed data using local Python implementation.
 
     This replicates the Solidity _getValidatorData function.
 
-    The packed format (69 bytes per validator):
-    - Bytes 0-15:  Metadata (16 bytes)
-                   - Bits 0-63:    valIndex (uint64 / 8 bytes)
-                   - Bits 64-103:  nodeOpId (uint40 / 5 bytes)
-                   - Bits 104-127: moduleId (uint24 / 3 bytes)
-    - Bytes 16-63: pubkey (48 bytes)
-    - Bytes 64-68: padding (5 bytes)
+    Format 1 (DATA_FORMAT_LIST) - 64 bytes per entry:
+        MSB <----------------------------------------------- LSB
+        |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
+        |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
+
+    Format 2 (DATA_FORMAT_LIST_WITH_KEY_INDEX) - 72 bytes per entry:
+        MSB <--------------------------------------------------------------- LSB
+        |  3 bytes   |  5 bytes   |     8 bytes      |   8 bytes  |    48 bytes     |
+        |  moduleId  |  nodeOpId  |  validatorIndex  |  keyIndex  | validatorPubkey |
 
     Args:
         exit_data: Packed exit requests data
         index: Index of the validator to unpack (0-based)
+        data_format: Data format identifier (1 or 2)
 
     Returns:
-        Dictionary with keys: pubkey (bytes), nodeOpId (int), moduleId (int), valIndex (int), index (int)
+        Dictionary with keys: pubkey (bytes), nodeOpId (int), moduleId (int),
+        valIndex (int), index (int), and optionally keyIndex (int) for format 2
 
     Raises:
-        ValueError: If index is out of range
+        ValueError: If index is out of range or data_format is unknown
     """
+    packed_request_length = _get_packed_request_length(data_format)
+
     # Check if index is valid
-    if index >= len(exit_data) // PACKED_REQUEST_LENGTH:
+    if index >= len(exit_data) // packed_request_length:
         raise ValueError(
-            f"Index {index} out of range for {len(exit_data) // PACKED_REQUEST_LENGTH} validators"
+            f"Index {index} out of range for {len(exit_data) // packed_request_length} validators"
         )
 
-    # Calculate offset for this validator
-    item_offset = PACKED_REQUEST_LENGTH * index
+    # Calculate offset for this validator entry
+    item_offset = packed_request_length * index
 
     # Read first 16 bytes which contain the metadata
-    # Format: | padding/zeros | 24 bits moduleId | 40 bits nodeOpId | 64 bits valIndex |
-    metadata_bytes = exit_data[item_offset : item_offset + 16]
+    # Memory layout (big-endian bytes → MSB first):
+    #   bytes 0-2:  moduleId  (24 bits, highest)
+    #   bytes 3-7:  nodeOpId  (40 bits)
+    #   bytes 8-15: valIndex  (64 bits, lowest)
+    metadata_bytes = exit_data[item_offset : item_offset + METADATA_LENGTH]
 
     # Convert bytes to integer (big-endian)
     data_without_pubkey = int.from_bytes(metadata_bytes, byteorder="big")
 
-    # Extract fields using bit shifting (same as Solidity)
-    # LSB first: valIndex occupies the lowest 64 bits
-    val_index = data_without_pubkey & 0xFFFFFFFFFFFFFFFF  # uint64 mask (64 bits)
+    # Extract fields using bit shifting (same as Solidity, LSB-first order)
+    val_index = data_without_pubkey & 0xFFFFFFFFFFFFFFFF  # lowest 64 bits
+    node_op_id = (data_without_pubkey >> 64) & 0xFFFFFFFFFF  # next 40 bits
+    module_id = (data_without_pubkey >> (64 + 40)) & 0xFFFFFF  # next 24 bits
 
-    # Next 40 bits: nodeOpId
-    node_op_id = (data_without_pubkey >> 64) & 0xFFFFFFFFFF  # uint40 mask (40 bits)
-
-    # Next 24 bits: moduleId
-    module_id = (data_without_pubkey >> (64 + 40)) & 0xFFFFFF  # uint24 mask (24 bits)
-
-    # Extract pubkey (48 bytes starting at offset 16)
-    pubkey_offset = item_offset + 16
-    pubkey = exit_data[pubkey_offset : pubkey_offset + PUBLIC_KEY_LENGTH]
-
-    return {
-        "pubkey": pubkey,
-        "nodeOpId": node_op_id,
+    result: dict[str, Any] = {
         "moduleId": module_id,
+        "nodeOpId": node_op_id,
         "valIndex": val_index,
         "index": index,
     }
 
+    # Extract keyIndex for format 2
+    if data_format == DATA_FORMAT_LIST_WITH_KEY_INDEX:
+        key_index_offset = item_offset + METADATA_LENGTH
+        key_index_bytes = exit_data[
+            key_index_offset : key_index_offset + KEY_INDEX_LENGTH
+        ]
+        result["keyIndex"] = int.from_bytes(key_index_bytes, byteorder="big")
 
-def decode_all_validators(exit_data: bytes) -> list[dict[str, Any]]:
+    # Extract pubkey (48 bytes)
+    pubkey_offset = item_offset + _get_pubkey_offset_in_entry(data_format)
+    result["pubkey"] = exit_data[pubkey_offset : pubkey_offset + PUBLIC_KEY_LENGTH]
+
+    return result
+
+
+def decode_all_validators(
+    exit_data: bytes, data_format: int = DATA_FORMAT_LIST
+) -> list[dict[str, Any]]:
     """
     Decode all validators from packed exit data using local Python implementation.
 
@@ -84,24 +143,27 @@ def decode_all_validators(exit_data: bytes) -> list[dict[str, Any]]:
 
     Args:
         exit_data: Packed exit requests data
+        data_format: Data format identifier (1 = DATA_FORMAT_LIST,
+                     2 = DATA_FORMAT_LIST_WITH_KEY_INDEX)
 
     Returns:
         List of validator dictionaries, each containing:
         - pubkey: bytes (48 bytes)
-        - nodeOpId: int
         - moduleId: int
+        - nodeOpId: int
         - valIndex: int
         - index: int (position in the list, 0-based)
+        - keyIndex: int (only for data_format=2)
 
     Raises:
         ValueError: If unable to unpack a validator or if data is invalid
     """
-    requests_count = calculate_requests_count(exit_data)
+    requests_count = calculate_requests_count(exit_data, data_format)
     validators = []
 
     for i in range(requests_count):
         try:
-            validator = unpack_exit_request(exit_data, i)
+            validator = unpack_exit_request(exit_data, i, data_format)
             validators.append(validator)
         except Exception as e:
             raise ValueError(f"Failed to unpack validator at index {i}: {e}") from e
@@ -109,14 +171,27 @@ def decode_all_validators(exit_data: bytes) -> list[dict[str, Any]]:
     return validators
 
 
-def calculate_requests_count(exit_data: bytes) -> int:
+def calculate_requests_count(
+    exit_data: bytes, data_format: int = DATA_FORMAT_LIST
+) -> int:
     """
     Calculate the number of validators in packed exit data.
 
     Args:
         exit_data: Packed exit requests data
+        data_format: Data format identifier (1 or 2)
 
     Returns:
         Number of validators that can be extracted from the data
+
+    Raises:
+        ValueError: If data_format is unknown or exit_data length is not an
+                    exact multiple of the entry size for the selected format.
     """
-    return len(exit_data) // PACKED_REQUEST_LENGTH
+    entry_len = _get_packed_request_length(data_format)
+    if len(exit_data) % entry_len != 0:
+        raise ValueError(
+            f"exit_data length {len(exit_data)} is not a multiple of "
+            f"{entry_len} bytes (data_format={data_format})"
+        )
+    return len(exit_data) // entry_len
