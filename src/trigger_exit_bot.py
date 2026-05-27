@@ -213,7 +213,7 @@ class TriggerExitBot:
                 "data_format": data_format,
             }
         )
-        validators = decode_all_validators(exit_requests_data)
+        validators = decode_all_validators(exit_requests_data, data_format)
 
         # Generate hash key for efficient storage
         data_key = self._get_data_key(exit_requests_data)
@@ -263,7 +263,7 @@ class TriggerExitBot:
         )
 
         # Decode all validators from the packed data
-        validators = decode_all_validators(exit_requests_data)
+        validators = decode_all_validators(exit_requests_data, data_format)
 
         # Generate hash key for efficient storage
         data_key = self._get_data_key(exit_requests_data)

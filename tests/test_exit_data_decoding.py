@@ -7,7 +7,10 @@ into validator information using local Python implementation.
 import pytest
 
 from src.utils.exit_data_decoder import (
-    PACKED_REQUEST_LENGTH,
+    DATA_FORMAT_LIST,
+    DATA_FORMAT_LIST_WITH_KEY_INDEX,
+    PACKED_REQUEST_LENGTH_V1,
+    PACKED_REQUEST_LENGTH_V2,
     decode_all_validators,
     unpack_exit_request,
 )
@@ -488,8 +491,8 @@ class TestExitDataDecoding:
         print(
             f"Exit data length: {len(exit_data)} bytes ({len(exit_data_hex)} hex chars)"
         )
-        print(f"Packed request length: {PACKED_REQUEST_LENGTH} bytes per validator")
-        print(f"Expected validators: {len(exit_data) // PACKED_REQUEST_LENGTH}")
+        print(f"Packed request length: {PACKED_REQUEST_LENGTH_V1} bytes per validator (format 1)")
+        print(f"Expected validators: {len(exit_data) // PACKED_REQUEST_LENGTH_V1}")
         print(f"Decoded validators: {len(validators)}")
         print(f"{'='*80}")
 
@@ -672,6 +675,98 @@ class TestExitDataDecoding:
                 )
 
         print(f"\n{'='*80}\n")
+
+
+    def test_decode_format2_with_key_index(self):
+        """
+        Test that DATA_FORMAT_LIST_WITH_KEY_INDEX (format 2) is decoded correctly.
+
+        Format 2 is 72 bytes per entry:
+            MSB <--------------------------------------------------------------- LSB
+            |  3 bytes   |  5 bytes   |     8 bytes      |   8 bytes  |    48 bytes     |
+            |  moduleId  |  nodeOpId  |  validatorIndex  |  keyIndex  | validatorPubkey |
+
+        The old decoder (format 1 only) would misread keyIndex bytes as the start of
+        the pubkey, producing a corrupted pubkey like:
+            0000000000000009ae2fd379... (keyIndex=9 prepended to the real pubkey bytes)
+        """
+        # Build a single format-2 entry manually:
+        module_id = 1      # 3 bytes
+        node_op_id = 7     # 5 bytes
+        val_index = 1064846  # 8 bytes
+        key_index = 9      # 8 bytes — the "corrupt prefix" seen in the logs
+        # Real pubkey (48 bytes) — matches the failing validator from the logs
+        real_pubkey_hex = "ae2fd379751dc0256d7ea54eca4d14f8456aec60bcd55397f17f2f01fee04381f5ee7c388ef1bcf0"
+        # Pad to 48 bytes (96 hex chars) if shorter
+        real_pubkey_hex = real_pubkey_hex.ljust(96, "0")
+        real_pubkey = bytes.fromhex(real_pubkey_hex)
+        assert len(real_pubkey) == 48
+
+        # Encode metadata: moduleId (24 bits) | nodeOpId (40 bits) | valIndex (64 bits)
+        metadata_int = (
+            (module_id << (64 + 40)) | (node_op_id << 64) | val_index
+        )
+        metadata_bytes = metadata_int.to_bytes(16, byteorder="big")
+
+        key_index_bytes = key_index.to_bytes(8, byteorder="big")
+
+        entry = metadata_bytes + key_index_bytes + real_pubkey
+        assert len(entry) == PACKED_REQUEST_LENGTH_V2  # 72 bytes
+
+        # ---- Verify format 2 decoding is correct ----
+        result = unpack_exit_request(entry, 0, data_format=DATA_FORMAT_LIST_WITH_KEY_INDEX)
+        assert result["moduleId"] == module_id
+        assert result["nodeOpId"] == node_op_id
+        assert result["valIndex"] == val_index
+        assert result["keyIndex"] == key_index
+        assert result["pubkey"] == real_pubkey, (
+            f"Pubkey mismatch!\n"
+            f"  Got:      {result['pubkey'].hex()}\n"
+            f"  Expected: {real_pubkey.hex()}"
+        )
+
+        # ---- Verify old format-1 decoding would produce the wrong result ----
+        wrong = unpack_exit_request(entry, 0, data_format=DATA_FORMAT_LIST)
+        # With format-1 decoder the "pubkey" starts 8 bytes too early,
+        # so it reads keyIndex bytes first — producing the corrupt value from the logs.
+        corrupted_expected = key_index_bytes + real_pubkey[:40]
+        assert wrong["pubkey"] == corrupted_expected, (
+            "Expected the format-1 decoder to produce the known-corrupted pubkey"
+        )
+
+        print(f"\n{'='*80}")
+        print("✅ FORMAT 2 DECODE TEST PASSED")
+        print(f"  Real pubkey:      0x{real_pubkey.hex()}")
+        print(f"  keyIndex:         {key_index}")
+        print(f"  Corrupt (fmt-1):  0x{wrong['pubkey'].hex()}")
+        print(f"{'='*80}\n")
+
+    def test_decode_all_validators_format2(self):
+        """
+        Test decode_all_validators correctly handles format 2 data when
+        data_format is passed explicitly.
+        """
+        module_id, node_op_id, val_index, key_index = 1, 7, 1064846, 9
+        real_pubkey = bytes.fromhex(
+            "ae2fd379751dc0256d7ea54eca4d14f8456aec60bcd55397f17f2f01fee04381f5ee7c388ef1bcf0"
+            .ljust(96, "0")
+        )
+        metadata_int = (module_id << (64 + 40)) | (node_op_id << 64) | val_index
+        entry = (
+            metadata_int.to_bytes(16, byteorder="big")
+            + key_index.to_bytes(8, byteorder="big")
+            + real_pubkey
+        )
+        data = entry * 3  # three identical validators
+
+        validators = decode_all_validators(data, data_format=DATA_FORMAT_LIST_WITH_KEY_INDEX)
+        assert len(validators) == 3
+        for i, v in enumerate(validators):
+            assert v["pubkey"] == real_pubkey, f"Validator {i} pubkey wrong: {v['pubkey'].hex()}"
+            assert v["keyIndex"] == key_index
+            assert v["index"] == i
+
+        print(f"\n✅ decode_all_validators with format 2 — {len(validators)} validators OK\n")
 
 
 if __name__ == "__main__":
