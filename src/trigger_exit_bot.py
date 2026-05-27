@@ -18,7 +18,7 @@ from src.metrics.metrics import (
     VALIDATORS_TRIGGERED,
 )
 from src.utils.cl_client import CLClient
-from src.utils.exit_data_decoder import decode_all_validators
+from src.utils.exit_data_decoder import SUPPORTED_DATA_FORMATS, decode_all_validators
 
 logger = structlog.get_logger(__name__)
 
@@ -213,6 +213,13 @@ class TriggerExitBot:
                 "data_format": data_format,
             }
         )
+
+        if data_format not in SUPPORTED_DATA_FORMATS:
+            raise ValueError(
+                f"Unsupported data_format {data_format!r} in submitReportData. "
+                f"Supported formats: {SUPPORTED_DATA_FORMATS}"
+            )
+
         validators = decode_all_validators(exit_requests_data, data_format)
 
         # Generate hash key for efficient storage
@@ -261,6 +268,12 @@ class TriggerExitBot:
                 "data_length": len(exit_requests_data),
             }
         )
+
+        if data_format not in SUPPORTED_DATA_FORMATS:
+            raise ValueError(
+                f"Unsupported data_format {data_format!r} in submitExitRequestsData. "
+                f"Supported formats: {SUPPORTED_DATA_FORMATS}"
+            )
 
         # Decode all validators from the packed data
         validators = decode_all_validators(exit_requests_data, data_format)

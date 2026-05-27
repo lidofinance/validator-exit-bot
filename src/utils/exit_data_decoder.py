@@ -28,11 +28,23 @@ METADATA_LENGTH = 16  # 3 + 5 + 8 bytes (moduleId + nodeOpId + validatorIndex)
 KEY_INDEX_LENGTH = 8  # bytes, only in format 2
 
 
+SUPPORTED_DATA_FORMATS = (DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX)
+
+
 def _get_packed_request_length(data_format: int) -> int:
-    """Return the byte size of a single packed exit request for the given data format."""
+    """Return the byte size of a single packed exit request for the given data format.
+
+    Raises:
+        ValueError: If data_format is not a recognised format constant.
+    """
+    if data_format == DATA_FORMAT_LIST:
+        return PACKED_REQUEST_LENGTH_V1
     if data_format == DATA_FORMAT_LIST_WITH_KEY_INDEX:
         return PACKED_REQUEST_LENGTH_V2
-    return PACKED_REQUEST_LENGTH_V1
+    raise ValueError(
+        f"Unknown data_format {data_format!r}. "
+        f"Supported formats: {SUPPORTED_DATA_FORMATS}"
+    )
 
 
 def _get_pubkey_offset_in_entry(data_format: int) -> int:
@@ -171,5 +183,15 @@ def calculate_requests_count(
 
     Returns:
         Number of validators that can be extracted from the data
+
+    Raises:
+        ValueError: If data_format is unknown or exit_data length is not an
+                    exact multiple of the entry size for the selected format.
     """
-    return len(exit_data) // _get_packed_request_length(data_format)
+    entry_len = _get_packed_request_length(data_format)
+    if len(exit_data) % entry_len != 0:
+        raise ValueError(
+            f"exit_data length {len(exit_data)} is not a multiple of "
+            f"{entry_len} bytes (data_format={data_format})"
+        )
+    return len(exit_data) // entry_len
