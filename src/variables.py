@@ -58,14 +58,6 @@ PROMETHEUS_PORT = int(os.getenv("PROMETHEUS_PORT", "9000"))
 PROMETHEUS_PREFIX = os.getenv("PROMETHEUS_PREFIX", "validator_exit_bot")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "9010"))
 
-# List of ids of staking modules in which the depositor bot will make deposits
-_env_whitelist = os.getenv("MODULES_WHITELIST", "").strip()
-MODULES_WHITELIST = (
-    [int(module_id) for module_id in _env_whitelist.split(",")]
-    if _env_whitelist
-    else []
-)
-DEPOSIT_MODULES_WHITELIST = MODULES_WHITELIST  # Alias for metrics compatibility
 # Same as min deposit block distance on mainnet for all modules
 # https://etherscan.io/address/0xFdDf38947aFB03C621C71b06C9C70bce73f12999#readProxyContract#F38
 BLOCKS_BETWEEN_EXECUTION = int(os.getenv("BLOCKS_BETWEEN_EXECUTION", 25))

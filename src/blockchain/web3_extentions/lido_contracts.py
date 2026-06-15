@@ -60,7 +60,7 @@ class LidoContracts(Module):
             ),
         )
 
-        for module_id in variables.MODULES_WHITELIST:
+        for module_id in self.staking_router.get_staking_module_ids():
             module_address = self.staking_router.get_staking_module(module_id)
             exit_penalties_address = self._probe_exit_penalties(module_address)
             if exit_penalties_address:
