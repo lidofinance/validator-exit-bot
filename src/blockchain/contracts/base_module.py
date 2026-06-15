@@ -10,8 +10,12 @@ logger = structlog.get_logger(__name__)
 class BaseModuleContract(ContractInterface):
     abi_path = "./interfaces/BaseModule.json"
 
-    def exit_penalties(self, block_identifier: BlockIdentifier = "latest") -> ChecksumAddress:
-        response = self.functions.EXIT_PENALTIES().call(block_identifier=block_identifier)
+    def exit_penalties(
+        self, block_identifier: BlockIdentifier = "latest"
+    ) -> ChecksumAddress:
+        response = self.functions.EXIT_PENALTIES().call(
+            block_identifier=block_identifier
+        )
         logger.info(
             {
                 "msg": "Call `EXIT_PENALTIES()`.",

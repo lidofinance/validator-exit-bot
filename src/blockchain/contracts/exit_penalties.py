@@ -11,7 +11,10 @@ class ExitPenaltiesContract(ContractInterface):
     abi_path = "./interfaces/ExitPenalties.json"
 
     def is_exit_delay_applicable(
-        self, node_op_id: int, pubkey: HexStr, block_identifier: BlockIdentifier = "latest"
+        self,
+        node_op_id: int,
+        pubkey: HexStr,
+        block_identifier: BlockIdentifier = "latest",
     ) -> bool:
         pubkey_bytes = bytes.fromhex(pubkey.removeprefix("0x"))
         response = self.functions.getExitPenaltyInfo(node_op_id, pubkey_bytes).call(
