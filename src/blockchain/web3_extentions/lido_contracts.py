@@ -1,6 +1,7 @@
 from typing import cast
 
 import structlog
+from eth_typing import ChecksumAddress
 from web3 import Web3
 from web3.module import Module
 
@@ -92,7 +93,7 @@ class LidoContracts(Module):
                     }
                 )
 
-    def _probe_exit_penalties(self, module_address: str) -> str | None:
+    def _probe_exit_penalties(self, module_address: ChecksumAddress) -> ChecksumAddress | None:
         try:
             base_module: BaseModuleContract = cast(
                 BaseModuleContract,
