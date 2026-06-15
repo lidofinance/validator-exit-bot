@@ -518,8 +518,8 @@ class TriggerExitBot:
         for module_id, count in validators_by_module.items():
             PENDING_VALIDATORS.labels(module_id=str(module_id)).set(count)
 
-        known_modules = (
-            set(self.w3.lido.exit_penalties_map) | set(self.w3.lido.node_operator_registry_map)
+        known_modules = set(self.w3.lido.exit_penalties_map) | set(
+            self.w3.lido.node_operator_registry_map
         )
         remaining_validators = self.validators_map.get(data_key, [])
         for validator in remaining_validators:

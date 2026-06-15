@@ -93,7 +93,9 @@ class LidoContracts(Module):
                     }
                 )
 
-    def _probe_exit_penalties(self, module_address: ChecksumAddress) -> ChecksumAddress | None:
+    def _probe_exit_penalties(
+        self, module_address: ChecksumAddress
+    ) -> ChecksumAddress | None:
         try:
             base_module: BaseModuleContract = cast(
                 BaseModuleContract,

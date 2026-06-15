@@ -1,8 +1,10 @@
 """Tests for new staking module support (ExitPenalties-based, non-NOR)."""
 
+from typing import Any
 from unittest.mock import Mock
 
-from eth_typing import ChecksumAddress, HexStr
+from eth_typing import HexStr
+from web3 import Web3
 
 from src.blockchain.contracts.exit_penalties import ExitPenaltiesContract
 from src.blockchain.web3_extentions.lido_contracts import ZERO_ADDRESS, LidoContracts
@@ -11,12 +13,12 @@ from src.trigger_exit_bot import TriggerExitBot
 PUBKEY = HexStr("0x" + "ab" * 48)
 MODULE_ID = 3
 NODE_OP_ID = 7
-EXIT_PENALTIES_ADDR = ChecksumAddress("0x" + "12" * 20)
-MODULE_ADDR = ChecksumAddress("0x" + "aa" * 20)
+EXIT_PENALTIES_ADDR = Web3.to_checksum_address("0x" + "12" * 20)
+MODULE_ADDR = Web3.to_checksum_address("0x" + "aa" * 20)
 DATA_KEY = "deadbeef" * 8
 
 
-def _make_bot(exit_penalties_map=None, nor_map=None):
+def _make_bot(exit_penalties_map=None, nor_map=None) -> Any:
     w3 = Mock()
     w3.lido.exit_penalties_map = exit_penalties_map or {}
     w3.lido.node_operator_registry_map = nor_map or {}
@@ -53,43 +55,61 @@ class TestExitPenaltiesContractIsApplicable:
         mock = Mock()
         mock.functions.getExitPenaltyInfo.return_value.call.return_value = (
             (0, delay_fee_is_value),  # delayFee: (value, isValue)
-            (0, False),               # strikesPenalty
-            (0, False),               # elWithdrawalRequestFee
+            (0, False),  # strikesPenalty
+            (0, False),  # elWithdrawalRequestFee
         )
         return mock
 
     def test_true_when_delay_fee_is_set(self):
         mock_self = self._mock_contract(True)
-        assert ExitPenaltiesContract.is_exit_delay_applicable(mock_self, NODE_OP_ID, PUBKEY) is True
+        assert (
+            ExitPenaltiesContract.is_exit_delay_applicable(
+                mock_self, NODE_OP_ID, PUBKEY
+            )
+            is True
+        )
 
     def test_false_when_delay_fee_not_set(self):
         mock_self = self._mock_contract(False)
-        assert ExitPenaltiesContract.is_exit_delay_applicable(mock_self, NODE_OP_ID, PUBKEY) is False
+        assert (
+            ExitPenaltiesContract.is_exit_delay_applicable(
+                mock_self, NODE_OP_ID, PUBKEY
+            )
+            is False
+        )
 
     def test_pubkey_passed_as_bytes_without_0x(self):
         mock_self = self._mock_contract(False)
-        ExitPenaltiesContract.is_exit_delay_applicable(mock_self, NODE_OP_ID, "0xabcd")
+        ExitPenaltiesContract.is_exit_delay_applicable(
+            mock_self, NODE_OP_ID, HexStr("0xabcd")
+        )
         called_pubkey = mock_self.functions.getExitPenaltyInfo.call_args[0][1]
         assert isinstance(called_pubkey, bytes)
         assert called_pubkey == bytes.fromhex("abcd")
 
     def test_pubkey_with_and_without_0x_produce_same_bytes(self):
         mock_self = self._mock_contract(False)
-        ExitPenaltiesContract.is_exit_delay_applicable(mock_self, NODE_OP_ID, "0xabcd")
-        ExitPenaltiesContract.is_exit_delay_applicable(mock_self, NODE_OP_ID, "abcd")
+        ExitPenaltiesContract.is_exit_delay_applicable(
+            mock_self, NODE_OP_ID, HexStr("0xabcd")
+        )
+        ExitPenaltiesContract.is_exit_delay_applicable(
+            mock_self, NODE_OP_ID, HexStr("abcd")
+        )
         calls = mock_self.functions.getExitPenaltyInfo.call_args_list
         assert calls[0][0][1] == calls[1][0][1]
 
 
 class TestProbeExitPenalties:
-    def _make_instance(self):
+    def _make_instance(self) -> Any:
         instance = Mock(spec=LidoContracts)
         instance.w3 = Mock()
         return instance
 
     def test_returns_address_for_new_style_module(self):
         instance = self._make_instance()
-        instance.w3.eth.contract.return_value.exit_penalties.return_value = EXIT_PENALTIES_ADDR
+        instance.w3.eth.contract.return_value.exit_penalties.return_value = (
+            EXIT_PENALTIES_ADDR
+        )
 
         result = LidoContracts._probe_exit_penalties(instance, MODULE_ADDR)
 
