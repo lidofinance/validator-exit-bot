@@ -3,6 +3,7 @@ from typing import cast
 import structlog
 from eth_typing import ChecksumAddress
 from web3 import Web3
+from web3.exceptions import BadFunctionCallOutput, ContractLogicError
 from web3.module import Module
 
 from src import variables
@@ -107,6 +108,12 @@ class LidoContracts(Module):
             exit_penalties_address = base_module.exit_penalties()
             if exit_penalties_address and exit_penalties_address != ZERO_ADDRESS:
                 return exit_penalties_address
-        except Exception:
-            pass
+        except (ContractLogicError, BadFunctionCallOutput) as exc:
+            logger.debug(
+                {
+                    "msg": "Module probe failed, treating as NOR-style",
+                    "module_address": module_address,
+                    "exc": str(exc),
+                }
+            )
         return None

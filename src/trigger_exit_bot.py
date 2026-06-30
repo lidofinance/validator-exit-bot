@@ -425,7 +425,7 @@ class TriggerExitBot:
                         {
                             "msg": "Exit delay penalty applicable, adding to trigger list",
                             "pubkey": pubkey_hex[:20] + "...",
-                            "validator_index": validator_index,
+                            "exit_data_index": validator_index,
                         }
                     )
                     validators_to_trigger.append(validator)
@@ -440,7 +440,7 @@ class TriggerExitBot:
                         {
                             "msg": "Exit delay penalty not yet applicable",
                             "pubkey": pubkey_hex[:20] + "...",
-                            "validator_index": validator_index,
+                            "exit_data_index": validator_index,
                         }
                     )
                     status_counts[(str(module_id), "not_reported")] = (

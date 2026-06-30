@@ -116,9 +116,11 @@ class TestProbeExitPenalties:
         assert result == EXIT_PENALTIES_ADDR
 
     def test_returns_none_when_call_reverts(self):
+        from web3.exceptions import ContractLogicError
+
         instance = self._make_instance()
-        instance.w3.eth.contract.return_value.exit_penalties.side_effect = Exception(
-            "execution reverted"
+        instance.w3.eth.contract.return_value.exit_penalties.side_effect = (
+            ContractLogicError("execution reverted")
         )
 
         result = LidoContracts._probe_exit_penalties(instance, MODULE_ADDR)

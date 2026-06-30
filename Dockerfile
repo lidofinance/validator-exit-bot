@@ -1,5 +1,5 @@
 # Optimized multi-stage Dockerfile
-FROM python:3.12.4-slim as base
+FROM python:3.14.6-slim as base
 
 # Runtime dependencies only (removed build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends -qq \
