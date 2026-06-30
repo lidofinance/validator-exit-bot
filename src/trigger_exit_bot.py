@@ -414,21 +414,41 @@ class TriggerExitBot:
                 )
                 continue
 
-            # Check if module_id is in the whitelist
-            if module_id not in variables.MODULES_WHITELIST:
-                logger.info(
-                    {
-                        "msg": "Module not in whitelist, skipping",
-                        "module_id": module_id,
-                        "exit_data_index": validator_index,
-                    }
+            # New-style module: check ExitPenalties.delayFee.isValue
+            exit_penalties = self.w3.lido.exit_penalties_map.get(module_id)
+            if exit_penalties is not None:
+                is_applicable = exit_penalties.is_exit_delay_applicable(
+                    node_op_id, pubkey_hex
                 )
-                status_counts[(str(module_id), "skipped_module")] = (
-                    status_counts.get((str(module_id), "skipped_module"), 0) + 1
-                )
+                if is_applicable:
+                    logger.info(
+                        {
+                            "msg": "Exit delay penalty applicable, adding to trigger list",
+                            "pubkey": pubkey_hex[:20] + "...",
+                            "exit_data_index": validator_index,
+                        }
+                    )
+                    validators_to_trigger.append(validator)
+                    status_counts[(str(module_id), "needs_exit")] = (
+                        status_counts.get((str(module_id), "needs_exit"), 0) + 1
+                    )
+                    validators_by_module[module_id] = (
+                        validators_by_module.get(module_id, 0) + 1
+                    )
+                else:
+                    logger.info(
+                        {
+                            "msg": "Exit delay penalty not yet applicable",
+                            "pubkey": pubkey_hex[:20] + "...",
+                            "exit_data_index": validator_index,
+                        }
+                    )
+                    status_counts[(str(module_id), "not_reported")] = (
+                        status_counts.get((str(module_id), "not_reported"), 0) + 1
+                    )
                 continue
 
-            # Get the node operator registry for this module
+            # NOR-style module: check isValidatorExitingKeyReported
             node_operator_registry = self.w3.lido.node_operator_registry_map.get(
                 module_id
             )
@@ -436,11 +456,12 @@ class TriggerExitBot:
             if node_operator_registry is None:
                 logger.warning(
                     {
-                        "msg": "Node operator registry not found for module",
+                        "msg": "No contract found for module, removing from state",
                         "module_id": module_id,
                         "exit_data_index": validator_index,
                     }
                 )
+                validators_to_remove.append(validator)
                 continue
 
             is_reported = node_operator_registry.is_validator_exiting_key_reported(
@@ -497,10 +518,13 @@ class TriggerExitBot:
         for module_id, count in validators_by_module.items():
             PENDING_VALIDATORS.labels(module_id=str(module_id)).set(count)
 
+        known_modules = set(self.w3.lido.exit_penalties_map) | set(
+            self.w3.lido.node_operator_registry_map
+        )
         remaining_validators = self.validators_map.get(data_key, [])
         for validator in remaining_validators:
             mid = validator["moduleId"]
-            if mid not in validators_by_module and mid in variables.MODULES_WHITELIST:
+            if mid not in validators_by_module and mid in known_modules:
                 PENDING_VALIDATORS.labels(module_id=str(mid)).set(0)
 
         # Trigger exits for reported validators

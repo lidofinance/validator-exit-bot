@@ -1,9 +1,9 @@
 # Optimized multi-stage Dockerfile
-FROM python:3.12.4-slim as base
+FROM python:3.14.6-slim as base
 
 # Runtime dependencies only (removed build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends -qq \
-    curl=7.88.1-10+deb12u14 \
+    curl=8.14.1-2+deb13u3 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -23,9 +23,9 @@ FROM base as builder
 
 # Build dependencies installed only in builder stage
 RUN apt-get update && apt-get install -y --no-install-recommends -qq \
-    gcc=4:12.2.0-3 \
-    libffi-dev=3.4.4-1 \
-    g++=4:12.2.0-3 \
+    gcc=4:14.2.0-1 \
+    libffi-dev=3.4.8-2 \
+    g++=4:14.2.0-1 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
