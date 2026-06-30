@@ -3,7 +3,7 @@ FROM python:3.14.6-slim as base
 
 # Runtime dependencies only (removed build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends -qq \
-    curl \
+    curl=8.14.1-2+deb13u3 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -23,9 +23,9 @@ FROM base as builder
 
 # Build dependencies installed only in builder stage
 RUN apt-get update && apt-get install -y --no-install-recommends -qq \
-    gcc \
-    libffi-dev \
-    g++ \
+    gcc=4:14.2.0-1 \
+    libffi-dev=3.4.8-2 \
+    g++=4:14.2.0-1 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
