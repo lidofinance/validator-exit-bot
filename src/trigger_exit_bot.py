@@ -2,6 +2,7 @@ from hashlib import sha256
 from typing import Any, Optional, cast
 
 import structlog
+from eth_abi.abi import encode as abi_encode
 from eth_typing import Hash32, HexStr
 from web3.types import BlockIdentifier, TxData, TxReceipt, Wei
 
@@ -22,6 +23,25 @@ from src.utils.cl_client import CLClient
 from src.utils.exit_data_decoder import SUPPORTED_DATA_FORMATS, decode_all_validators
 
 logger = structlog.get_logger(__name__)
+
+# Name of the struct argument carrying the exit requests, per VEBO entry point.
+EXIT_REQUESTS_ARGUMENT = {
+    "submitReportData": "data",
+    "submitExitRequestsData": "request",
+}
+
+
+def _exit_requests_payload(
+    function_name: str, decoded_data: dict[str, Any]
+) -> tuple[bytes, int]:
+    """Extract the packed exit requests and their format from a decoded submission."""
+    request = decoded_data.get(EXIT_REQUESTS_ARGUMENT[function_name], {})
+    return request.get("data", b""), request.get("dataFormat", 0)
+
+
+def _exit_requests_hash(data: bytes, data_format: int) -> bytes:
+    """Reproduce VEBO's `keccak256(abi.encode(data, dataFormat))` request hash."""
+    return Web3.keccak(abi_encode(["bytes", "uint256"], [data, data_format]))
 
 
 class TriggerExitBot:
@@ -69,29 +89,37 @@ class TriggerExitBot:
         return tx, tx_receipt
 
     def _decode_transaction_input(
-        self, input_data: HexStr
+        self, input_data: HexStr, exit_requests_hash: bytes
     ) -> tuple[Optional[str], Optional[dict[str, Any]]]:
         """
-        Attempt to decode transaction input data.
+        Find the submission that produced a given ExitDataProcessing event.
 
-        Tries to decode as submitReportData first, then as submitExitRequestsData.
+        The VEBO call may be nested inside a forwarder's calldata, and a single
+        transaction may carry several submissions, so candidates are matched by
+        their exit requests hash rather than taken positionally. The hash also
+        rules out a selector match that happened to fall inside unrelated bytes.
 
         Returns:
-            Tuple of (function_name, decoded_data) or (None, None) if both fail
+            Tuple of (function_name, decoded_data) or (None, None) if no
+            submission in the transaction matches the event.
         """
-        # Try to decode as submitReportData first
-        decoded = self.vebo.decode_submit_report_data(input_data)
-        if decoded is not None:
-            return "submitReportData", decoded
-
-        # If that fails, try to decode as submitExitRequestsData
-        decoded = self.vebo.decode_submit_exit_requests_data(input_data)
-        if decoded is not None:
-            return "submitExitRequestsData", decoded
+        for function_name, params in self.vebo.find_exit_requests_calls(input_data):
+            data, data_format = _exit_requests_payload(function_name, params)
+            if _exit_requests_hash(data, data_format) == exit_requests_hash:
+                logger.info(
+                    {
+                        "msg": "Matched exit requests submission",
+                        "function_name": function_name,
+                        "data_format": data_format,
+                        "data_length": len(data),
+                    }
+                )
+                return function_name, params
 
         logger.warning(
             {
-                "msg": "Failed to decode transaction input as either submitReportData or submitExitRequestsData"
+                "msg": "No exit requests submission in the transaction matches the event",
+                "exit_requests_hash": exit_requests_hash.hex(),
             }
         )
         return None, None
@@ -171,18 +199,15 @@ class TriggerExitBot:
             if tx_input is None:
                 raise ValueError("Transaction data does not contain input")
             function_name, decoded_data = self._decode_transaction_input(
-                Web3.to_hex(tx_input)
+                Web3.to_hex(tx_input), exit_requests_hash
             )
 
             if function_name is None or decoded_data is None:
+                EVENTS_PROCESSED.labels(status="failed").inc()
                 raise ValueError("Could not decode transaction input")
 
-            if function_name == "submitReportData":
-                self._process_submit_report_data(decoded_data)
-                EVENTS_PROCESSED.labels(status="success").inc()
-            elif function_name == "submitExitRequestsData":
-                self._process_submit_exit_requests_data(decoded_data)
-                EVENTS_PROCESSED.labels(status="success").inc()
+            self._store_exit_requests(function_name, decoded_data)
+            EVENTS_PROCESSED.labels(status="success").inc()
 
         # After processing all events, check and trigger exits for ALL validators in state
         logger.info(
@@ -197,19 +222,23 @@ class TriggerExitBot:
 
         return events
 
-    def _process_submit_report_data(self, decoded_data: dict[str, Any]) -> None:
-        """Process decoded submitReportData transaction."""
-        data_obj = decoded_data.get("data", {})
-        exit_requests_data = data_obj.get("data", b"")
-        data_format = data_obj.get("dataFormat", 0)
-        requests_count = data_obj.get("requestsCount", 0)
+    def _store_exit_requests(
+        self, function_name: str, decoded_data: dict[str, Any]
+    ) -> None:
+        """Decode the packed exit requests of a submission and keep them in state."""
+        exit_requests_data, data_format = _exit_requests_payload(
+            function_name, decoded_data
+        )
+        # Only `submitReportData` carries oracle report metadata; for
+        # `submitExitRequestsData` these fields are absent and logged as None.
+        report = decoded_data.get("data", {})
 
         logger.info(
             {
-                "msg": "Processing submitReportData",
-                "consensus_version": data_obj.get("consensusVersion"),
-                "ref_slot": data_obj.get("refSlot"),
-                "requests_count": requests_count,
+                "msg": f"Processing {function_name}",
+                "consensus_version": report.get("consensusVersion"),
+                "ref_slot": report.get("refSlot"),
+                "requests_count": report.get("requestsCount"),
                 "data_length": len(exit_requests_data),
                 "data_format": data_format,
             }
@@ -217,7 +246,7 @@ class TriggerExitBot:
 
         if data_format not in SUPPORTED_DATA_FORMATS:
             raise ValueError(
-                f"Unsupported data_format {data_format!r} in submitReportData. "
+                f"Unsupported data_format {data_format!r} in {function_name}. "
                 f"Supported formats: {SUPPORTED_DATA_FORMATS}"
             )
 
@@ -227,90 +256,27 @@ class TriggerExitBot:
         data_key = self._get_data_key(exit_requests_data)
         self.validators_map[data_key] = validators
         self.data_format_map[data_key] = data_format
-        self.data_bytes_map[data_key] = (
-            exit_requests_data
-            if isinstance(exit_requests_data, bytes)
-            else bytes.fromhex(exit_requests_data)
-        )
+        self.data_bytes_map[data_key] = exit_requests_data
 
         logger.info(
             {
-                "msg": "Stored validators mapping for submitReportData",
+                "msg": f"Stored validators mapping for {function_name}",
                 "data_hash": data_key,
                 "validators_count": len(validators),
             }
         )
 
         # Log sample validators
-        if validators:
-            for i, validator in enumerate(validators[:3]):  # Log first 3 validators
-                logger.info(
-                    {
-                        "msg": f"Validator {i}",
-                        "pubkey": validator["pubkey"].hex()
-                        if isinstance(validator["pubkey"], bytes)
-                        else validator["pubkey"],
-                        "moduleId": validator["moduleId"],
-                        "nodeOpId": validator["nodeOpId"],
-                        "valIndex": validator["valIndex"],
-                    }
-                )
-
-    def _process_submit_exit_requests_data(self, decoded_data: dict[str, Any]):
-        """Process decoded submitExitRequestsData transaction."""
-        request_obj = decoded_data.get("request", {})
-        exit_requests_data = request_obj.get("data", b"")
-        data_format = request_obj.get("dataFormat", 0)
-
-        logger.info(
-            {
-                "msg": "Processing submitExitRequestsData",
-                "data_format": data_format,
-                "data_length": len(exit_requests_data),
-            }
-        )
-
-        if data_format not in SUPPORTED_DATA_FORMATS:
-            raise ValueError(
-                f"Unsupported data_format {data_format!r} in submitExitRequestsData. "
-                f"Supported formats: {SUPPORTED_DATA_FORMATS}"
+        for i, validator in enumerate(validators[:3]):
+            logger.info(
+                {
+                    "msg": f"Validator {i}",
+                    "pubkey": validator["pubkey"].hex(),
+                    "moduleId": validator["moduleId"],
+                    "nodeOpId": validator["nodeOpId"],
+                    "valIndex": validator["valIndex"],
+                }
             )
-
-        # Decode all validators from the packed data
-        validators = decode_all_validators(exit_requests_data, data_format)
-
-        # Generate hash key for efficient storage
-        data_key = self._get_data_key(exit_requests_data)
-        self.validators_map[data_key] = validators
-        self.data_format_map[data_key] = data_format
-        self.data_bytes_map[data_key] = (
-            exit_requests_data
-            if isinstance(exit_requests_data, bytes)
-            else bytes.fromhex(exit_requests_data)
-        )
-
-        logger.info(
-            {
-                "msg": "Stored validators mapping for submitExitRequestsData",
-                "data_hash": data_key,
-                "validators_count": len(validators),
-            }
-        )
-
-        # Log sample validators
-        if validators:
-            for i, validator in enumerate(validators[:3]):  # Log first 3 validators
-                logger.info(
-                    {
-                        "msg": f"Validator {i}",
-                        "pubkey": validator["pubkey"].hex()
-                        if isinstance(validator["pubkey"], bytes)
-                        else validator["pubkey"],
-                        "moduleId": validator["moduleId"],
-                        "nodeOpId": validator["nodeOpId"],
-                        "valIndex": validator["valIndex"],
-                    }
-                )
 
     def get_validators_for_data(
         self, exit_requests_data: bytes | str

@@ -137,7 +137,11 @@ The bot consists of several key components:
 ```
 1. Bot fetches ExitDataProcessing events from VEBO contract
    ↓
-2. Decodes exit request data from transaction input
+2. Locates the VEBO submission inside the transaction input and decodes the
+   exit request data. Oracle members may submit reports directly to VEBO or
+   through a forwarder contract, so the submission is found by scanning the
+   calldata for the known selectors and confirmed against the
+   `exitRequestsHash` of the event
    ↓
 3. Stores validator data in memory (hashed for efficiency)
    ↓
