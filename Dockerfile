@@ -3,7 +3,7 @@ FROM python:3.14.6-slim as base
 
 # Runtime dependencies only (removed build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends -qq \
-    curl=8.14.1-2+deb13u3 \
+    curl=8.14.1-2+deb13u4 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
