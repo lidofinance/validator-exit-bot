@@ -16,7 +16,7 @@ class BaseModuleContract(ContractInterface):
         response = self.functions.EXIT_PENALTIES().call(
             block_identifier=block_identifier
         )
-        logger.info(
+        logger.debug(
             {
                 "msg": "Call `EXIT_PENALTIES()`.",
                 "value": response,

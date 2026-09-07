@@ -1,9 +1,11 @@
 """Tests for new staking module support (ExitPenalties-based, non-NOR)."""
 
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
 
-from eth_typing import HexStr
+import pytest
+from eth_typing import ChecksumAddress, HexStr
 from web3 import Web3
 
 from src.blockchain.contracts.exit_penalties import ExitPenaltiesContract
@@ -203,3 +205,85 @@ class TestCheckAndTriggerExitsNewModule:
         bot._trigger_exits_transaction.assert_not_called()
         mock_exit_penalties.is_exit_delay_applicable.assert_not_called()
         assert bot.validators_map[DATA_KEY] == []
+
+
+class TestRefreshModules:
+    """Staking modules are re-read every cycle, not only at startup."""
+
+    NOR_MODULE_ADDR = Web3.to_checksum_address("0x" + "11" * 20)
+    CSM_MODULE_ADDR = Web3.to_checksum_address("0x" + "66" * 20)
+    CSM_EXIT_PENALTIES_ADDR = Web3.to_checksum_address("0x" + "77" * 20)
+
+    def _make_contracts(self, module_addresses: dict[int, ChecksumAddress]) -> Any:
+        contracts = LidoContracts.__new__(LidoContracts)
+        contracts.exit_penalties_map = {}
+        contracts.node_operator_registry_map = {}
+        contracts.staking_router = Mock()
+        contracts.staking_router.get_staking_module_ids.side_effect = lambda: list(
+            module_addresses
+        )
+        contracts.staking_router.get_staking_module.side_effect = (
+            lambda module_id: module_addresses[module_id]
+        )
+        contracts.w3 = Mock()
+        # Keep the address so _modules_snapshot() can tell contracts apart.
+        contracts.w3.eth.contract.side_effect = lambda address, **_: SimpleNamespace(
+            address=address
+        )
+        contracts._probe_exit_penalties = Mock(return_value=None)
+        return contracts
+
+    def test_picks_up_module_added_after_startup(self):
+        modules = {1: self.NOR_MODULE_ADDR}
+        contracts = self._make_contracts(modules)
+        contracts.refresh_modules()
+        assert sorted(contracts.node_operator_registry_map) == [1]
+        assert contracts.exit_penalties_map == {}
+
+        # CSM 0x02 registered in StakingRouter while the bot is running.
+        modules[6] = self.CSM_MODULE_ADDR
+        contracts._probe_exit_penalties.side_effect = (
+            lambda address: self.CSM_EXIT_PENALTIES_ADDR
+            if address == self.CSM_MODULE_ADDR
+            else None
+        )
+
+        contracts.refresh_modules()
+
+        assert sorted(contracts.exit_penalties_map) == [6]
+        assert sorted(contracts.node_operator_registry_map) == [1]
+
+    def test_module_switching_to_exit_penalties_leaves_nor_map(self):
+        contracts = self._make_contracts({1: self.NOR_MODULE_ADDR})
+        contracts.refresh_modules()
+        assert sorted(contracts.node_operator_registry_map) == [1]
+
+        contracts._probe_exit_penalties.return_value = self.CSM_EXIT_PENALTIES_ADDR
+
+        contracts.refresh_modules()
+
+        assert sorted(contracts.exit_penalties_map) == [1]
+        assert contracts.node_operator_registry_map == {}
+
+    def test_keeps_previous_maps_when_refresh_fails(self):
+        modules = {1: self.NOR_MODULE_ADDR, 6: self.CSM_MODULE_ADDR}
+        contracts = self._make_contracts(modules)
+        contracts.refresh_modules()
+        loaded = dict(contracts.node_operator_registry_map)
+        assert sorted(loaded) == [1, 6]
+
+        # Fail after the first module resolved, so a map published as it is
+        # built would end up holding only module 1.
+        def fail_on_second(module_id: int) -> ChecksumAddress:
+            if module_id != 1:
+                raise ConnectionError("node unreachable")
+            return modules[module_id]
+
+        contracts.staking_router.get_staking_module.side_effect = fail_on_second
+
+        with pytest.raises(ConnectionError):
+            contracts.refresh_modules()
+
+        # A half-built view would make known modules look unknown and their
+        # validators get dropped.
+        assert contracts.node_operator_registry_map == loaded

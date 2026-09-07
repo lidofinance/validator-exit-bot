@@ -16,7 +16,7 @@ class StakingRouterContract(ContractInterface):
         response = self.functions.getStakingModuleIds().call(
             block_identifier=block_identifier
         )
-        logger.info(
+        logger.debug(
             {
                 "msg": "Call `getStakingModuleIds()`.",
                 "value": response,
@@ -31,7 +31,7 @@ class StakingRouterContract(ContractInterface):
         response = self.functions.getStakingModule(id).call(
             block_identifier=block_identifier
         )
-        logger.info(
+        logger.debug(
             {
                 "msg": f"Call `getStakingModule({id})`.",
                 "value": response,

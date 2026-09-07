@@ -135,6 +135,9 @@ The bot consists of several key components:
 ### Workflow
 
 ```
+0. Bot re-reads the staking module list from StakingRouter, so a module
+   registered after startup is picked up without a restart
+   ↓
 1. Bot fetches ExitDataProcessing events from VEBO contract
    ↓
 2. Locates the VEBO submission inside the transaction input and decodes the

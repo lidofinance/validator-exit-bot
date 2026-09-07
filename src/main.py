@@ -133,6 +133,11 @@ def main():
             # Fetch and process ExitDataProcessing events
             cycle_start_time = time.time()
             try:
+                # Staking modules can be added or replaced at any time; without a
+                # refresh the bot would drop validators of a module registered
+                # after startup.
+                w3.lido.refresh_modules()
+
                 events = bot.trigger_exits(
                     from_block=from_block, to_block=finalized_block
                 )
