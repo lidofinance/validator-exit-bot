@@ -25,6 +25,10 @@ class TransactionUtils(Module):
             value = Wei(0)
         try:
             call_params = TxParams({})
+            # Without an explicit sender the node bills the call to the zero address, so any
+            # value-bearing call fails on its balance rather than on the contract's own logic.
+            if variables.ACCOUNT:
+                call_params["from"] = variables.ACCOUNT.address
             if value > 0:
                 call_params["value"] = value
             transaction.call(call_params)
