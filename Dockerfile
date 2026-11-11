@@ -52,10 +52,9 @@ ARG BUILD_VERSION
 ARG BUILD_BRANCH
 ARG BUILD_COMMIT
 COPY --chown=www-data:www-data build-info.json ./
-# json.dump and not printf: a tag or a branch name may contain a quote.
 RUN if [ -n "$BUILD_COMMIT" ]; then \
-      python3 -c 'import json, sys; json.dump(dict(zip(("version", "branch", "commit"), sys.argv[1:])), open("build-info.json", "w"))' \
-        "$BUILD_VERSION" "$BUILD_BRANCH" "$BUILD_COMMIT"; \
+      printf '{"version":"%s","branch":"%s","commit":"%s"}\n' \
+        "$BUILD_VERSION" "$BUILD_BRANCH" "$BUILD_COMMIT" > build-info.json; \
     fi
 
 ENV PROMETHEUS_PORT=9000 \
