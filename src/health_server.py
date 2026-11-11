@@ -40,6 +40,10 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"metrics": "ok", "reason": "ok"}\n')
 
+    def log_message(self, format: str, *args) -> None:
+        # The default writes a plain-text line to stderr for every request, between the JSON lines of the bot.
+        logger.debug({"msg": "Health server request", "value": format % args})
+
 
 def _run_server(port: int):
     """Start the HTTP server (blocking)."""
