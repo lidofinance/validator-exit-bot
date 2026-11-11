@@ -13,6 +13,22 @@ logger = structlog.get_logger(__name__)
 # The endpoint refused or throttled this client: it said nothing about the validator.
 ENDPOINT_FAILURE_STATUSES = frozenset({401, 403, 408, 429})
 
+# The statuses of the Beacon API. Any other text is a malformed answer: read as a status,
+# it would count as "not exited" and lead to an exit trigger.
+VALIDATOR_STATUSES = frozenset(
+    {
+        "pending_initialized",
+        "pending_queued",
+        "active_ongoing",
+        "active_exiting",
+        "active_slashed",
+        "exited_unslashed",
+        "exited_slashed",
+        "withdrawal_possible",
+        "withdrawal_done",
+    }
+)
+
 
 def _is_endpoint_failure(status_code: int) -> bool:
     return status_code >= 500 or status_code in ENDPOINT_FAILURE_STATUSES
@@ -22,12 +38,15 @@ def _is_validators_list(data: Any) -> bool:
     return isinstance(data, list)
 
 
-def _is_validator(data: Any) -> bool:
-    return isinstance(data, dict)
+def _is_validator_with_index(data: Any) -> bool:
+    return isinstance(data, dict) and str(data.get("index")).isdecimal()
 
 
 def _is_validator_with_status(data: Any) -> bool:
-    return isinstance(data, dict) and isinstance(data.get("status"), str)
+    if not isinstance(data, dict):
+        return False
+    status = data.get("status")
+    return isinstance(status, str) and status.lower() in VALIDATOR_STATUSES
 
 
 class CLClient:
@@ -127,7 +146,7 @@ class CLClient:
         data = self._get(
             f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}",
             timeout=10,
-            is_valid_data=_is_validator,
+            is_valid_data=_is_validator_with_index,
         )
 
         if data.get("error"):

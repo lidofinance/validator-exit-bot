@@ -59,6 +59,11 @@ NO_ANSWER = [
     pytest.param(make_response(200, {"data": None}), id="null-data"),
     pytest.param(make_response(200, []), id="not-an-object"),
     pytest.param(make_response(200, {"data": {}}), id="no-status"),
+    pytest.param(make_response(200, {"data": {"status": ""}}), id="empty-status"),
+    pytest.param(
+        make_response(200, {"data": {"status": "syncing"}}), id="unknown-status"
+    ),
+    pytest.param(make_response(200, {"data": {"status": None}}), id="null-status"),
 ]
 
 FINAL = [
@@ -145,10 +150,11 @@ class TestCLClientFallbackSwitches:
         with patch(SESSION_GET, side_effect=responses):
             assert client.get_all_validators() == validators
 
-    def test_index_request_skips_data_that_is_not_an_object(self):
+    @pytest.mark.parametrize("data", [[], {}, {"index": None}, {"index": "abc"}])
+    def test_index_request_skips_data_without_a_numeric_index(self, data):
         """Test that a malformed validator answer is not used for the index."""
         client = CLClient([FIRST, SECOND])
-        responses = [make_response(200, {"data": []}), answer()]
+        responses = [make_response(200, {"data": data}), answer()]
 
         with patch(SESSION_GET, side_effect=responses):
             assert client.get_validator_index_by_pubkey(PUBKEY) == 12345
@@ -237,12 +243,12 @@ class TestCLClientAllEndpointsFail:
         with patch(SESSION_GET, side_effect=[response]):
             assert client.is_validator_exited(PUBKEY) == (False, True)
 
-    def test_answer_without_status_is_a_cl_error(self):
-        """Test that validator data without a status is not read as "not exited"."""
+    def test_answer_without_a_known_status_is_a_cl_error(self):
+        """Test that validator data without a Beacon API status is not read as "not exited"."""
         client = CLClient([FIRST, SECOND])
         responses = [
-            make_response(200, {"data": {}}),
             make_response(200, {"data": {"index": "12345"}}),
+            make_response(200, {"data": {"index": "12345", "status": "syncing"}}),
         ]
 
         with patch(SESSION_GET, side_effect=responses):
