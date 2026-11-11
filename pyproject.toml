@@ -19,6 +19,7 @@ structlog = "^24.1.0"
 click = "^8.1.8"
 eth-typing = "^5.0.0"
 requests = "^2.31.0"
+logmask = "^0.1.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.3,<10.0"
