@@ -273,6 +273,13 @@ class TestLogOutput:
         assert dump["CONSENSUS_CLIENT_URL"] == ["***", "***"]
         assert dump["WALLET_PRIVATE_KEY_FILE"] == file_config["WALLET_PRIVATE_KEY_FILE"]
 
+    def test_config_dump_has_the_gas_limit(self, start_bot, env_config, stdout):
+        """Test that the dump shows the gas limit the bot sends transactions with."""
+        write_log_lines(start_bot({**env_config, "CONTRACT_GAS_LIMIT": "1000000"}))
+
+        dump = events(stdout)["config"]["event"]["value"]
+        assert dump["CONTRACT_GAS_LIMIT"] == 1000000
+
     def test_unset_key_is_shown_as_empty(self, start_bot, env_config, stdout):
         """Test that the dump tells an unset key from a masked one."""
         del env_config["WALLET_PRIVATE_KEY"]
