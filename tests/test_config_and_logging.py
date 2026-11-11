@@ -1,21 +1,32 @@
 """Tests of the bot start: where the secrets come from and what reaches the log.
 
-The config is read and logging is configured once, at import, so every case runs in its own process.
+The config is read and logging is configured once, at import, so every case reloads both modules
+with its own environment.
 """
 
+import importlib
+import io
 import json
-import os
-import subprocess
+import logging
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
+import structlog
+from logmask import masked_config
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from src import logging_setup, variables
 
 PRIVATE_KEY = "0x" + "11" * 32
-EL_URLS = "https://el-one.example.com/v3/el-key-123456,https://el-two.example.com/el-key-abcdef"
-CL_URLS = "https://cl-one.example.com/eth/cl-key-654321,https://cl-two.example.com/cl-key-fedcba"
+EL_URLS = [
+    "https://el-one.example.com/v3/el-key-123456",
+    "https://el-two.example.com/el-key-abcdef",
+]
+CL_URLS = [
+    "https://cl-one.example.com/eth/cl-key-654321",
+    "https://cl-two.example.com/cl-key-fedcba",
+]
 SECRET_PARTS = (
     "11" * 32,
     "el-key-123456",
@@ -23,77 +34,62 @@ SECRET_PARTS = (
     "cl-key-654321",
     "cl-key-fedcba",
 )
-
-PROBE = """
-import json
-import logging
-import os
-
-import structlog
-from logmask import masked_config
-
-from src import variables
-
-logger = structlog.get_logger("probe")
-logger.info({"msg": "config", "value": masked_config(variables.PUBLIC_ENV_VARS, variables.PRIVATE_ENV_VARS)})
-logger.debug({"msg": "debug line"})
-logger.error({"msg": "request failed", "error": "503 Server Error for url: " + variables.CONSENSUS_CLIENT_URL[0]})
-logger.error({"msg": "second endpoint failed", "error": "timeout for " + variables.CONSENSUS_CLIENT_URL[-1]})
-logger.error({"msg": "signing failed", "error": "bad key " + (variables.WALLET_PRIVATE_KEY or "")})
-logging.getLogger("urllib3").warning("Retrying %s", variables.WEB3_RPC_ENDPOINTS[0])
-try:
-    raise RuntimeError("no answer from " + variables.WEB3_RPC_ENDPOINTS[-1])
-except RuntimeError:
-    logger.error({"msg": "cycle failed"}, exc_info=True)
-
-expected = os.environ
-print(json.dumps({"probe": {
-    "el": variables.WEB3_RPC_ENDPOINTS == expected.get("EXPECTED_EL", "").split(","),
-    "cl": variables.CONSENSUS_CLIENT_URL == expected.get("EXPECTED_CL", "").split(","),
-    "key": (variables.WALLET_PRIVATE_KEY or "") == expected.get("EXPECTED_KEY", ""),
-    "account": variables.ACCOUNT is not None,
-}}))
-"""
+CONFIG_NAMES = (
+    "WEB3_RPC_ENDPOINTS",
+    "WEB3_RPC_ENDPOINTS_FILE",
+    "CONSENSUS_CLIENT_URL",
+    "CONSENSUS_CLIENT_URL_FILE",
+    "WALLET_PRIVATE_KEY",
+    "WALLET_PRIVATE_KEY_FILE",
+    "LOG_LEVEL",
+)
 
 
-def run_bot(env: dict[str, str], code: str = PROBE) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=REPO_ROOT,
-        env={"PATH": os.environ["PATH"], **env},
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+@pytest.fixture
+def stdout() -> io.StringIO:
+    return io.StringIO()
 
 
-def json_lines(result: subprocess.CompletedProcess) -> list[dict]:
-    """Parse stdout; a line that is not a JSON object fails the test."""
-    lines = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
-    assert all(isinstance(line, dict) for line in lines)
-    return lines
+@pytest.fixture
+def start_bot(monkeypatch, stdout):
+    """Read the config and configure logging again; the original state is back after the test."""
+
+    def start(env: dict[str, str]) -> ModuleType:
+        # Here and not in a fixture: pytest puts its own capture back into sys.stdout before the test body.
+        monkeypatch.setattr(sys, "stdout", stdout)
+        for name in CONFIG_NAMES:
+            monkeypatch.delenv(name, raising=False)
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        importlib.reload(logging_setup)
+        return importlib.reload(variables)
+
+    yield start
+    monkeypatch.undo()
+    importlib.reload(logging_setup)
+    importlib.reload(variables)
 
 
-def probe(result: subprocess.CompletedProcess) -> dict:
-    return next(line["probe"] for line in json_lines(result) if "probe" in line)
+@pytest.fixture
+def env_config() -> dict[str, str]:
+    return {
+        "WEB3_RPC_ENDPOINTS": ",".join(EL_URLS),
+        "CONSENSUS_CLIENT_URL": ",".join(CL_URLS),
+        "WALLET_PRIVATE_KEY": PRIVATE_KEY,
+    }
 
 
-def event_lines(result: subprocess.CompletedProcess) -> list[dict]:
-    return [line for line in json_lines(result) if isinstance(line.get("event"), dict)]
-
-
-def messages(result: subprocess.CompletedProcess) -> list[str]:
-    return [line["event"]["msg"] for line in event_lines(result)]
-
-
-def find_event(result: subprocess.CompletedProcess, msg: str) -> dict:
-    return next(line for line in event_lines(result) if line["event"]["msg"] == msg)
-
-
-def assert_no_secret(result: subprocess.CompletedProcess):
-    output = result.stdout + result.stderr
-    for part in SECRET_PARTS:
-        assert part not in output
+@pytest.fixture
+def file_config(tmp_path) -> dict[str, str]:
+    return {
+        "WEB3_RPC_ENDPOINTS_FILE": write_secret(
+            tmp_path, "el", ",".join(EL_URLS) + "\n"
+        ),
+        "CONSENSUS_CLIENT_URL_FILE": write_secret(
+            tmp_path, "cl", ",".join(CL_URLS) + "\n"
+        ),
+        "WALLET_PRIVATE_KEY_FILE": write_secret(tmp_path, "key", PRIVATE_KEY + "\n"),
+    }
 
 
 def write_secret(tmp_path: Path, name: str, content: str) -> str:
@@ -102,63 +98,81 @@ def write_secret(tmp_path: Path, name: str, content: str) -> str:
     return str(path)
 
 
-@pytest.fixture
-def env_config() -> dict[str, str]:
+def write_log_lines(config: ModuleType):
+    """Log every secret of the config in the ways the bot can meet it."""
+    logger = structlog.get_logger("test")
+    dump = masked_config(config.PUBLIC_ENV_VARS, config.PRIVATE_ENV_VARS)
+    logger.info({"msg": "config", "value": dump})
+    logger.debug({"msg": "debug line"})
+    logger.error({"msg": "request failed", "error": config.CONSENSUS_CLIENT_URL[0]})
+    logger.error({"msg": "second failed", "error": config.CONSENSUS_CLIENT_URL[-1]})
+    logger.error({"msg": "signing failed", "error": config.WALLET_PRIVATE_KEY or ""})
+    logging.getLogger("urllib3").warning("Retrying %s", config.WEB3_RPC_ENDPOINTS[0])
+    try:
+        raise RuntimeError("no answer from " + config.WEB3_RPC_ENDPOINTS[-1])
+    except RuntimeError:
+        logger.error({"msg": "cycle failed"}, exc_info=True)
+
+
+def crash(error: BaseException):
+    """Call the hook the interpreter calls for an exception nobody caught."""
+    sys.excepthook(type(error), error, error.__traceback__)
+
+
+def json_lines(stdout: io.StringIO) -> list[dict]:
+    """Parse the output; a line that is not a JSON object fails the test."""
+    lines = [json.loads(line) for line in stdout.getvalue().splitlines() if line]
+    assert all(isinstance(line, dict) for line in lines)
+    return lines
+
+
+def events(stdout: io.StringIO) -> dict[str, dict]:
+    """The lines the bot wrote through structlog, by their message."""
     return {
-        "WEB3_RPC_ENDPOINTS": EL_URLS,
-        "CONSENSUS_CLIENT_URL": CL_URLS,
-        "WALLET_PRIVATE_KEY": PRIVATE_KEY,
-        "EXPECTED_EL": EL_URLS,
-        "EXPECTED_CL": CL_URLS,
-        "EXPECTED_KEY": PRIVATE_KEY,
+        line["event"]["msg"]: line
+        for line in json_lines(stdout)
+        if isinstance(line.get("event"), dict)
     }
 
 
-@pytest.fixture
-def file_config(tmp_path) -> dict[str, str]:
-    return {
-        "WEB3_RPC_ENDPOINTS_FILE": write_secret(tmp_path, "el", EL_URLS + "\n"),
-        "CONSENSUS_CLIENT_URL_FILE": write_secret(tmp_path, "cl", CL_URLS + "\n"),
-        "WALLET_PRIVATE_KEY_FILE": write_secret(tmp_path, "key", PRIVATE_KEY + "\n"),
-        "EXPECTED_EL": EL_URLS,
-        "EXPECTED_CL": CL_URLS,
-        "EXPECTED_KEY": PRIVATE_KEY,
-    }
+def assert_no_secret(text: str):
+    for part in SECRET_PARTS:
+        assert part not in text
 
 
 class TestSecretsSources:
     """Test the values the bot starts with for each source of the secrets."""
 
-    def test_start_through_env(self, env_config):
+    def test_start_through_env(self, start_bot, env_config):
         """Test that the start with plain variables works as before."""
-        result = run_bot(env_config)
+        config = start_bot(env_config)
 
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert probe(result) == {"el": True, "cl": True, "key": True, "account": True}
+        assert config.WEB3_RPC_ENDPOINTS == EL_URLS
+        assert config.CONSENSUS_CLIENT_URL == CL_URLS
+        assert config.WALLET_PRIVATE_KEY == PRIVATE_KEY
+        assert config.ACCOUNT is not None
 
-    def test_start_without_key_is_dry_mode(self):
+    def test_start_without_key_is_dry_mode(self, start_bot, env_config, stdout):
         """Test the minimal config: two endpoints and no key."""
-        env = {
-            "WEB3_RPC_ENDPOINTS": EL_URLS,
-            "CONSENSUS_CLIENT_URL": CL_URLS,
-            "EXPECTED_EL": EL_URLS,
-            "EXPECTED_CL": CL_URLS,
-        }
+        del env_config["WALLET_PRIVATE_KEY"]
 
-        result = run_bot(env)
+        config = start_bot(env_config)
 
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert probe(result) == {"el": True, "cl": True, "key": True, "account": False}
-        assert "Account not provided. Run in dry mode." in messages(result)
+        assert config.WEB3_RPC_ENDPOINTS == EL_URLS
+        assert config.CONSENSUS_CLIENT_URL == CL_URLS
+        assert config.ACCOUNT is None
+        assert "Account not provided. Run in dry mode." in events(stdout)
 
-    def test_secrets_from_files(self, file_config):
+    def test_secrets_from_files(self, start_bot, file_config):
         """Test that the content of the files, without the final newline, is the config."""
-        result = run_bot(file_config)
+        config = start_bot(file_config)
 
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert probe(result) == {"el": True, "cl": True, "key": True, "account": True}
+        assert config.WEB3_RPC_ENDPOINTS == EL_URLS
+        assert config.CONSENSUS_CLIENT_URL == CL_URLS
+        assert config.WALLET_PRIVATE_KEY == PRIVATE_KEY
+        assert config.ACCOUNT is not None
 
-    def test_file_wins_over_env(self, file_config):
+    def test_file_wins_over_env(self, start_bot, file_config):
         """Test that a variable is ignored when its file variable is set."""
         env = {
             **file_config,
@@ -167,169 +181,158 @@ class TestSecretsSources:
             "WALLET_PRIVATE_KEY": "0x" + "22" * 32,
         }
 
-        result = run_bot(env)
+        config = start_bot(env)
 
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert probe(result) == {"el": True, "cl": True, "key": True, "account": True}
+        assert config.WEB3_RPC_ENDPOINTS == EL_URLS
+        assert config.CONSENSUS_CLIENT_URL == CL_URLS
+        assert config.WALLET_PRIVATE_KEY == PRIVATE_KEY
 
-    def test_empty_key_file_is_dry_mode(self, file_config, tmp_path):
+    def test_empty_key_file_is_dry_mode(self, start_bot, file_config, tmp_path):
         """Test that an empty key file is the same as no key."""
-        env = {
-            **file_config,
-            "WALLET_PRIVATE_KEY_FILE": write_secret(tmp_path, "empty-key", "\n"),
-            "EXPECTED_KEY": "",
-        }
+        file_config["WALLET_PRIVATE_KEY_FILE"] = write_secret(tmp_path, "empty", "\n")
 
-        result = run_bot(env)
+        config = start_bot(file_config)
 
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert probe(result)["account"] is False
+        assert config.ACCOUNT is None
 
-    def test_empty_endpoints_file_stops_the_start(self, file_config, tmp_path):
+    def test_empty_endpoints_file_stops_the_start(
+        self, start_bot, file_config, tmp_path, stdout
+    ):
         """Test that an empty CL file is the same error as an unset variable."""
-        env = {
-            **file_config,
-            "CONSENSUS_CLIENT_URL_FILE": write_secret(tmp_path, "empty-cl", ""),
-        }
+        file_config["CONSENSUS_CLIENT_URL_FILE"] = write_secret(tmp_path, "empty", "")
 
-        result = run_bot(env)
+        with pytest.raises(
+            ValueError, match="CONSENSUS_CLIENT_URL environment variable is required"
+        ) as error:
+            start_bot(file_config)
 
-        assert result.returncode != 0
-        assert "CONSENSUS_CLIENT_URL environment variable is required" in (
-            result.stdout + result.stderr
-        )
-        assert_no_secret(result)
+        assert_no_secret(stdout.getvalue() + str(error.value))
 
-    def test_missing_file_stops_the_start(self, file_config, tmp_path):
+    def test_missing_file_stops_the_start(
+        self, start_bot, file_config, tmp_path, stdout
+    ):
         """Test that a wrong path is reported with the name of the variable."""
-        env = {**file_config, "WALLET_PRIVATE_KEY_FILE": str(tmp_path / "absent")}
+        file_config["WALLET_PRIVATE_KEY_FILE"] = str(tmp_path / "absent")
 
-        result = run_bot(env)
+        with pytest.raises(ValueError, match="WALLET_PRIVATE_KEY_FILE") as error:
+            start_bot(file_config)
 
-        assert result.returncode != 0
-        assert "WALLET_PRIVATE_KEY_FILE" in result.stdout + result.stderr
-        assert_no_secret(result)
+        assert_no_secret(stdout.getvalue() + str(error.value))
 
-    def test_endpoints_file_with_one_url_per_line(self, file_config, tmp_path):
+    def test_endpoints_file_with_one_url_per_line(
+        self, start_bot, file_config, tmp_path
+    ):
         """Test that a file written one URL per line gives separate endpoints."""
-        env = {
-            **file_config,
-            "CONSENSUS_CLIENT_URL_FILE": write_secret(
-                tmp_path, "cl-lines", CL_URLS.replace(",", "\n") + "\n"
-            ),
-        }
+        file_config["CONSENSUS_CLIENT_URL_FILE"] = write_secret(
+            tmp_path, "cl-lines", "\n".join(CL_URLS) + "\n"
+        )
 
-        result = run_bot(env)
+        config = start_bot(file_config)
 
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert probe(result)["cl"] is True
+        assert config.CONSENSUS_CLIENT_URL == CL_URLS
 
-    def test_invalid_key_stops_the_start(self, file_config, tmp_path):
+    def test_invalid_key_stops_the_start(
+        self, start_bot, file_config, tmp_path, stdout
+    ):
         """Test that a key the account library rejects is one masked error line."""
         bad_key = "not-a-hex-key-but-still-a-secret-0123456789"
-        env = {
-            **file_config,
-            "WALLET_PRIVATE_KEY_FILE": write_secret(tmp_path, "bad-key", bad_key),
-        }
+        file_config["WALLET_PRIVATE_KEY_FILE"] = write_secret(tmp_path, "bad", bad_key)
 
-        result = run_bot(env)
+        with pytest.raises(ValueError) as error:
+            start_bot(file_config)
+        crash(error.value)
 
-        assert result.returncode != 0
-        assert [line["levelname"] for line in json_lines(result)] == ["CRITICAL"]
-        assert bad_key not in result.stdout + result.stderr
+        assert [line["levelname"] for line in json_lines(stdout)] == ["CRITICAL"]
+        assert bad_key not in stdout.getvalue()
 
 
 class TestLogOutput:
     """Test that every line of the start is JSON and carries no secret."""
 
-    @pytest.mark.parametrize("config", ["env_config", "file_config"])
-    def test_no_secret_in_the_output(self, config, request):
+    @pytest.mark.parametrize("config_name", ["env_config", "file_config"])
+    def test_no_secret_in_the_output(self, config_name, request, start_bot, stdout):
         """Test the config dump, an error text, a library logger line and a traceback."""
-        result = run_bot(request.getfixturevalue(config))
+        write_log_lines(start_bot(request.getfixturevalue(config_name)))
 
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert_no_secret(result)
+        assert_no_secret(stdout.getvalue())
         assert {
             "config",
             "request failed",
-            "second endpoint failed",
+            "second failed",
             "signing failed",
             "cycle failed",
-        } <= set(messages(result))
+        } <= set(events(stdout))
 
-    def test_config_dump_masks_private_values(self, file_config):
+    def test_config_dump_masks_private_values(self, start_bot, file_config, stdout):
         """Test that the dump shows the sources of the secrets and hides their values."""
-        result = run_bot(file_config)
+        write_log_lines(start_bot(file_config))
 
-        dump = find_event(result, "config")["event"]["value"]
+        dump = events(stdout)["config"]["event"]["value"]
         assert dump["WALLET_PRIVATE_KEY"] == "***"
         assert dump["WEB3_RPC_ENDPOINTS"] == ["***", "***"]
         assert dump["CONSENSUS_CLIENT_URL"] == ["***", "***"]
         assert dump["WALLET_PRIVATE_KEY_FILE"] == file_config["WALLET_PRIVATE_KEY_FILE"]
 
-    def test_unset_key_is_shown_as_empty(self):
+    def test_unset_key_is_shown_as_empty(self, start_bot, env_config, stdout):
         """Test that the dump tells an unset key from a masked one."""
-        env = {"WEB3_RPC_ENDPOINTS": EL_URLS, "CONSENSUS_CLIENT_URL": CL_URLS}
+        del env_config["WALLET_PRIVATE_KEY"]
 
-        result = run_bot(env)
+        write_log_lines(start_bot(env_config))
 
-        dump = find_event(result, "config")["event"]["value"]
-        assert dump["WALLET_PRIVATE_KEY"] == ""
+        assert events(stdout)["config"]["event"]["value"]["WALLET_PRIVATE_KEY"] == ""
 
-    def test_library_logger_line_is_json(self, env_config):
+    def test_library_logger_line_is_json(self, start_bot, env_config, stdout):
         """Test that a standard-library logger writes a masked JSON line to stdout."""
-        result = run_bot(env_config)
+        write_log_lines(start_bot(env_config))
 
         library_lines = [
-            line for line in json_lines(result) if line.get("name") == "urllib3"
+            line for line in json_lines(stdout) if line.get("name") == "urllib3"
         ]
         assert len(library_lines) == 1
         assert "***" in json.dumps(library_lines[0])
 
-    def test_traceback_is_in_the_line(self, env_config):
+    def test_traceback_is_in_the_line(self, start_bot, env_config, stdout):
         """Test that an error logged with exc_info carries its traceback."""
-        result = run_bot(env_config)
+        write_log_lines(start_bot(env_config))
 
-        assert "RuntimeError" in find_event(result, "cycle failed")["exception"]
+        assert "RuntimeError" in events(stdout)["cycle failed"]["exception"]
 
 
 class TestUnhandledError:
     """Test the last line of a bot that stops on an error."""
 
-    def test_unhandled_error_is_one_masked_json_line(self, env_config):
+    def test_unhandled_error_is_one_masked_json_line(
+        self, start_bot, env_config, stdout
+    ):
         """Test that the text of a crash does not carry an endpoint URL."""
-        code = (
-            "from src import variables\n"
-            "raise RuntimeError('down: ' + variables.CONSENSUS_CLIENT_URL[0])\n"
-        )
+        config = start_bot(env_config)
 
-        result = run_bot(env_config, code)
+        crash(RuntimeError("down: " + config.CONSENSUS_CLIENT_URL[0]))
 
-        assert result.returncode == 1
-        crash = [
-            line for line in json_lines(result) if line.get("levelname") == "CRITICAL"
+        lines = [
+            line for line in json_lines(stdout) if line.get("levelname") == "CRITICAL"
         ]
-        assert len(crash) == 1
-        assert "RuntimeError" in json.dumps(crash[0])
-        assert_no_secret(result)
+        assert len(lines) == 1
+        assert "RuntimeError" in json.dumps(lines[0])
+        assert_no_secret(stdout.getvalue())
 
 
 class TestLogLevel:
     """Test the LOG_LEVEL variable."""
 
-    def test_default_level_hides_debug(self, env_config):
+    def test_default_level_hides_debug(self, start_bot, env_config, stdout):
         """Test that debug lines are not written by default."""
-        assert "debug line" not in messages(run_bot(env_config))
+        write_log_lines(start_bot(env_config))
 
-    def test_debug_level_in_lower_case(self, env_config):
+        assert "debug line" not in events(stdout)
+
+    def test_debug_level_in_lower_case(self, start_bot, env_config, stdout):
         """Test that the level name is not case sensitive."""
-        result = run_bot({**env_config, "LOG_LEVEL": "debug"})
+        write_log_lines(start_bot({**env_config, "LOG_LEVEL": "debug"}))
 
-        assert "debug line" in messages(result)
+        assert "debug line" in events(stdout)
 
-    def test_unknown_level_stops_the_start(self, env_config):
+    def test_unknown_level_stops_the_start(self, start_bot, env_config):
         """Test that a wrong level name is reported by the name of the variable."""
-        result = run_bot({**env_config, "LOG_LEVEL": "LOUD"})
-
-        assert result.returncode != 0
-        assert "LOG_LEVEL" in result.stdout + result.stderr
+        with pytest.raises(ValueError, match="LOG_LEVEL"):
+            start_bot({**env_config, "LOG_LEVEL": "LOUD"})
