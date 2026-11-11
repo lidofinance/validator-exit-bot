@@ -12,11 +12,6 @@ ENV PYTHONUNBUFFERED=1 \
 
 ENV PATH="$VENV_PATH/bin:$PATH"
 
-# Debian security fixes released after the base image tag was built.
-RUN apt-get update && apt-get upgrade -y --no-install-recommends -qq \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
-
 
 FROM base AS builder
 
