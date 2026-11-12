@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Any, Optional
 from urllib.parse import urljoin
 
@@ -5,12 +6,59 @@ import requests
 import structlog
 from eth_typing import HexStr
 
+from src.utils.build_info import user_agent as default_user_agent
+
 logger = structlog.get_logger(__name__)
+
+# The endpoint refused or throttled this client: it said nothing about the validator.
+ENDPOINT_FAILURE_STATUSES = frozenset({401, 403, 408, 429})
+
+# The statuses of the Beacon API. Any other text is a malformed answer: read as a status,
+# it would count as "not exited" and lead to an exit trigger.
+VALIDATOR_STATUSES = frozenset(
+    {
+        "pending_initialized",
+        "pending_queued",
+        "active_ongoing",
+        "active_exiting",
+        "active_slashed",
+        "exited_unslashed",
+        "exited_slashed",
+        "withdrawal_possible",
+        "withdrawal_done",
+    }
+)
+
+
+def _is_endpoint_failure(status_code: int) -> bool:
+    return status_code >= 500 or status_code in ENDPOINT_FAILURE_STATUSES
+
+
+def _is_validators_list(data: Any) -> bool:
+    return isinstance(data, list)
+
+
+def _is_validator_with_index(data: Any) -> bool:
+    return isinstance(data, dict) and str(data.get("index")).isdecimal()
+
+
+def _is_validator_with_status(data: Any) -> bool:
+    if not isinstance(data, dict):
+        return False
+    status = data.get("status")
+    return isinstance(status, str) and status.lower() in VALIDATOR_STATUSES
 
 
 class CLClient:
-    def __init__(self, url: str):
-        self.url = url.rstrip("/") + "/"
+    def __init__(self, urls: str | list[str], user_agent: Optional[str] = None):
+        if isinstance(urls, str):
+            urls = [urls]
+        self.urls = [url.strip().rstrip("/") + "/" for url in urls if url.strip()]
+        if not self.urls:
+            raise ValueError("At least one Consensus Layer URL is required")
+
+        self._session = requests.Session()
+        self._session.headers["User-Agent"] = user_agent or default_user_agent()
 
     @staticmethod
     def _ensure_0x_prefix(pubkey: HexStr) -> str:
@@ -19,6 +67,64 @@ class CLClient:
             return f"0x{pubkey}"
         return pubkey
 
+    def _get(
+        self, path: str, timeout: int, is_valid_data: Callable[[Any], bool]
+    ) -> dict[str, Any]:
+        """
+        Ask the endpoints in the configured order and return the first answer.
+
+        An endpoint that gives no answer (network error, 5xx, refused client,
+        malformed body) is skipped. An answer about the request itself is final,
+        because an error must never turn into a validator status: a 404, a 400 or
+        another 4xx is raised at once without asking the remaining endpoints, and
+        a body with "error" is returned for the caller to handle.
+
+        When no endpoint answered, the error of the last one is raised.
+        """
+        last_error: Exception = RuntimeError("No Consensus Layer endpoint was called")
+
+        for index, base_url in enumerate(self.urls):
+            status_code: int | None = None
+            try:
+                response = self._session.get(urljoin(base_url, path), timeout=timeout)
+                response.raise_for_status()
+                body = response.json()
+            except requests.HTTPError as error:
+                if error.response is not None:
+                    status_code = error.response.status_code
+                if status_code is not None and not _is_endpoint_failure(status_code):
+                    logger.warning(
+                        {
+                            "msg": "CL endpoint rejected the request",
+                            "endpoint": index,
+                            "status_code": status_code,
+                        }
+                    )
+                    raise
+                last_error = error
+            except requests.RequestException as error:
+                last_error = error
+            else:
+                if isinstance(body, dict) and (
+                    body.get("error") or is_valid_data(body.get("data"))
+                ):
+                    return body
+                status_code = response.status_code
+                last_error = ValueError("Malformed response from the CL API")
+
+            is_last = index == len(self.urls) - 1
+            outcome = "no endpoint left" if is_last else "trying the next one"
+            logger.warning(
+                {
+                    "msg": f"CL endpoint failed, {outcome}",
+                    "endpoint": index,
+                    "error_type": type(last_error).__name__,
+                    "status_code": status_code,
+                }
+            )
+
+        raise last_error
+
     def get_validators_by_indexes(self) -> dict[int, HexStr]:
         validators = self.get_all_validators()
         return {
@@ -26,23 +132,22 @@ class CLClient:
         }
 
     def get_all_validators(self) -> list[dict[str, Any]]:
-        response = requests.get(
-            urljoin(self.url, "eth/v1/beacon/states/head/validators"), timeout=60
+        body = self._get(
+            "eth/v1/beacon/states/head/validators",
+            timeout=60,
+            is_valid_data=_is_validators_list,
         )
-        response.raise_for_status()
-        return response.json()["data"]
+        if body.get("error"):
+            raise ValueError("CL API returned an error for the validators list")
+        return body["data"]
 
     def get_validator_index_by_pubkey(self, pub_key: HexStr) -> int:
         pubkey_with_prefix = self._ensure_0x_prefix(pub_key)
-        response = requests.get(
-            urljoin(
-                self.url, f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}"
-            ),
+        data = self._get(
+            f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}",
             timeout=10,
+            is_valid_data=_is_validator_with_index,
         )
-        response.raise_for_status()
-
-        data = response.json()
 
         if data.get("error"):
             raise ValueError(f"Validator not found in CL for public key: {pub_key}")
@@ -57,15 +162,11 @@ class CLClient:
         """
         try:
             pubkey_with_prefix = self._ensure_0x_prefix(pub_key)
-            response = requests.get(
-                urljoin(
-                    self.url,
-                    f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}",
-                ),
+            data = self._get(
+                f"eth/v1/beacon/states/head/validators/{pubkey_with_prefix}",
                 timeout=10,
+                is_valid_data=_is_validator_with_status,
             )
-            response.raise_for_status()
-            data = response.json()
 
             if data.get("error"):
                 logger.warning(
@@ -79,12 +180,12 @@ class CLClient:
 
             return data.get("data")
         except Exception as e:
+            # Neither the endpoint URL nor the error text: both can carry a provider key.
             logger.error(
                 {
                     "msg": "Failed to get validator from CL",
                     "pubkey": pub_key,
-                    "error": str(e),
-                    "cl_url": self.url,
+                    "error_type": type(e).__name__,
                 }
             )
             return None

@@ -42,7 +42,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:$${SERVER_PORT:-9010}/health"]
+      test: ["CMD", "python3", "-m", "src.healthcheck"]
       interval: 10s
       timeout: 3s
       start_period: 5s
