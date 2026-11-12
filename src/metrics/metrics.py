@@ -1,6 +1,6 @@
 from prometheus_client.metrics import Counter, Gauge, Histogram, Info
 
-from src.variables import PROMETHEUS_PREFIX, PUBLIC_ENV_VARS
+from src.variables import BUILD_INFO, PROMETHEUS_PREFIX, PUBLIC_ENV_VARS
 
 TX_SEND = Counter(
     "transactions_send",
@@ -73,4 +73,4 @@ PENDING_VALIDATORS = Gauge(
 
 INFO = Info(name="build", documentation="Info metric", namespace=PROMETHEUS_PREFIX)
 CONVERTED_PUBLIC_ENV = {k: str(v) for k, v in PUBLIC_ENV_VARS.items()}
-INFO.info(CONVERTED_PUBLIC_ENV)
+INFO.info({**CONVERTED_PUBLIC_ENV, **BUILD_INFO})
