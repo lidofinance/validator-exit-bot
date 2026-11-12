@@ -41,12 +41,12 @@ Create a `.env` file in the project root with the following variables:
 # Required: Ethereum RPC endpoints (comma-separated for fallback)
 WEB3_RPC_ENDPOINTS=https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY,https://mainnet.infura.io/v3/YOUR_KEY
 
-# Required: Consensus Layer Beacon API endpoint
-CONSENSUS_CLIENT_URL=https://beacon-node.example.com
+# Required: Consensus Layer Beacon API endpoints (comma-separated for fallback)
+CONSENSUS_CLIENT_URL=https://beacon-node.example.com,https://backup-beacon-node.example.com
 
 # Optional: Account private key (required for sending transactions)
 # Without this, the bot will run in monitoring mode only
-ACCOUNT=0x1234567890abcdef...
+WALLET_PRIVATE_KEY=0x1234567890abcdef...
 
 # Optional: Module IDs to process (comma-separated, defaults to all)
 MODULES_WHITELIST=1,2
@@ -68,6 +68,30 @@ PROMETHEUS_PORT=9090
 ```
 
 See `env.example` for a complete template.
+
+#### Consensus Layer fallback
+
+The bot asks the `CONSENSUS_CLIENT_URL` endpoints in the given order, starting from the first one for every request. It moves to the next endpoint when one gives no answer: a network error, a timeout, a 5xx, 401, 403, 408 or 429 status, or a malformed body. A 404, a 400 or a body with an error is a final answer and is not asked again. When no endpoint answers, the validator is skipped for this cycle and no exit is triggered.
+
+#### Secrets from files
+
+`WALLET_PRIVATE_KEY`, `WEB3_RPC_ENDPOINTS` and `CONSENSUS_CLIENT_URL` can be read from files. Set `<NAME>_FILE` to the path of a file that holds the value. An endpoints file holds the same list as the variable; the URLs can be separated by commas or written one per line:
+
+```bash
+WALLET_PRIVATE_KEY_FILE=/run/secrets/wallet_private_key
+WEB3_RPC_ENDPOINTS_FILE=/run/secrets/web3_rpc_endpoints
+CONSENSUS_CLIENT_URL_FILE=/run/secrets/consensus_client_url
+```
+
+- When `<NAME>_FILE` is set, the file is used and `<NAME>` is ignored.
+- Whitespace at the end of the file is dropped.
+- The file is read once, at start. Restart the bot to apply a new value.
+- An empty key file means no key: the bot runs in dry mode. An empty endpoints file stops the start, like an unset variable.
+- A file that is missing or is not UTF-8 text stops the start.
+
+At start the bot logs its build and the whole config with the secret values shown as `***`. The log lines of the bot and of its libraries go through a masker that replaces these values, their URL parts and their encoded forms; a part of a value or a hash of it is not masked.
+
+`docker-compose.yml` passes only the plain variables. To use files with it, mount them and add the `<NAME>_FILE` variables to the service.
 
 ### Running the Bot
 
@@ -135,9 +159,16 @@ The bot consists of several key components:
 ### Workflow
 
 ```
+0. Bot re-reads the staking module list from StakingRouter, so a module
+   registered after startup is picked up without a restart
+   ↓
 1. Bot fetches ExitDataProcessing events from VEBO contract
    ↓
-2. Decodes exit request data from transaction input
+2. Locates the VEBO submission inside the transaction input and decodes the
+   exit request data. Oracle members may submit reports directly to VEBO or
+   through a forwarder contract, so the submission is found by scanning the
+   calldata for the known selectors and confirmed against the
+   `exitRequestsHash` of the event
    ↓
 3. Stores validator data in memory (hashed for efficiency)
    ↓
@@ -276,7 +307,7 @@ Each exit request contains:
 # Basic bot operation with minimal configuration
 WEB3_RPC_ENDPOINTS=https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY \
 CONSENSUS_CLIENT_URL=https://beacon-node.example.com \
-ACCOUNT=0x1234567890abcdef... \
+WALLET_PRIVATE_KEY=0x1234567890abcdef... \
 poetry run python -m src.main
 ```
 
@@ -436,7 +467,7 @@ Health and metrics endpoints help monitor bot operation:
 ### Account Security
 
 - The bot requires an Ethereum account with a private key to send transactions
-- Store the private key securely (e.g., in `.env` file with proper permissions, or use a secrets manager)
+- Store the private key securely (e.g., in `.env` file with proper permissions, or in a file from a secrets manager passed through `WALLET_PRIVATE_KEY_FILE`)
 - Never commit private keys to version control
 - The account needs sufficient ETH for:
   - Gas fees for `trigger_exits` transactions

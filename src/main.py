@@ -1,8 +1,8 @@
-import logging
 import time
 
 import structlog
 import web3_multi_provider
+from logmask import masked_config
 from prometheus_client import start_http_server
 from web3_multi_provider import FallbackProvider
 from web3_multi_provider.metrics import MetricsConfig
@@ -19,40 +19,39 @@ from src.metrics.metrics import (
     UNEXPECTED_EXCEPTIONS,
 )
 from src.trigger_exit_bot import TriggerExitBot
+from src.utils.build_info import user_agent
 from src.utils.cl_client import CLClient
 from src.variables import (
     ACCOUNT,
+    BUILD_INFO,
     CONSENSUS_CLIENT_URL,
-    LOG_LEVEL,
     LOOKBACK_DAYS,
+    PRIVATE_ENV_VARS,
     PROMETHEUS_PORT,
     PROMETHEUS_PREFIX,
+    PUBLIC_ENV_VARS,
     SERVER_PORT,
     SLEEP_INTERVAL_SECONDS,
     WEB3_RPC_ENDPOINTS,
-)
-
-# Configure structlog for JSON logging
-structlog.configure(
-    processors=[
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.StackInfoRenderer(),
-        structlog.dev.set_exc_info,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ],
-    wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, LOG_LEVEL)),
-    context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
-    cache_logger_on_first_use=False,
 )
 
 logger = structlog.get_logger(__name__)
 
 
 def create_web3(endpoints: list[str]) -> Web3:
-    w3 = Web3(FallbackProvider(endpoints, cache_allowed_requests=True))
+    w3 = Web3(
+        FallbackProvider(
+            endpoints,
+            cache_allowed_requests=True,
+            # web3 drops its default headers when the caller passes any, so Content-Type goes along.
+            request_kwargs={
+                "headers": {
+                    "Content-Type": "application/json",
+                    "User-Agent": user_agent(BUILD_INFO),
+                }
+            },
+        )
+    )
     logger.info({"msg": "Current chain_id", "chain_id": w3.eth.chain_id})
     w3.attach_modules(
         {
@@ -64,11 +63,19 @@ def create_web3(endpoints: list[str]) -> Web3:
 
 
 def create_cl_client(endpoints: list[str]) -> CLClient:
-    return CLClient(endpoints[0])
+    return CLClient(endpoints, user_agent=user_agent(BUILD_INFO))
 
 
 def main():
     """Main bot logic."""
+    logger.info({"msg": "Start validator exit bot.", "build": BUILD_INFO})
+    logger.info(
+        {
+            "msg": "Bot env variables",
+            "value": masked_config(PUBLIC_ENV_VARS, PRIVATE_ENV_VARS),
+        }
+    )
+
     # Start health server in background thread
     start_health_server(SERVER_PORT)
     start_http_server(PROMETHEUS_PORT)
@@ -133,6 +140,11 @@ def main():
             # Fetch and process ExitDataProcessing events
             cycle_start_time = time.time()
             try:
+                # Staking modules can be added or replaced at any time; without a
+                # refresh the bot would drop validators of a module registered
+                # after startup.
+                w3.lido.refresh_modules()
+
                 events = bot.trigger_exits(
                     from_block=from_block, to_block=finalized_block
                 )

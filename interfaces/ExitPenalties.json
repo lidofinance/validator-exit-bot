@@ -1,0 +1,79 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "nodeOperatorId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "publicKey",
+        "type": "bytes"
+      }
+    ],
+    "name": "getExitPenaltyInfo",
+    "outputs": [
+      {
+        "components": [
+          {
+            "components": [
+              {
+                "internalType": "uint248",
+                "name": "value",
+                "type": "uint248"
+              },
+              {
+                "internalType": "bool",
+                "name": "isValue",
+                "type": "bool"
+              }
+            ],
+            "internalType": "struct MarkedUint248",
+            "name": "delayFee",
+            "type": "tuple"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint248",
+                "name": "value",
+                "type": "uint248"
+              },
+              {
+                "internalType": "bool",
+                "name": "isValue",
+                "type": "bool"
+              }
+            ],
+            "internalType": "struct MarkedUint248",
+            "name": "strikesPenalty",
+            "type": "tuple"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint248",
+                "name": "value",
+                "type": "uint248"
+              },
+              {
+                "internalType": "bool",
+                "name": "isValue",
+                "type": "bool"
+              }
+            ],
+            "internalType": "struct MarkedUint248",
+            "name": "elWithdrawalRequestFee",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct ExitPenaltyInfo",
+        "name": "penaltyInfo",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

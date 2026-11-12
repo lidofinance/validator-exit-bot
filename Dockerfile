@@ -1,11 +1,5 @@
 # Optimized multi-stage Dockerfile
-FROM python:3.12.4-slim as base
-
-# Runtime dependencies only (removed build tools)
-RUN apt-get update && apt-get install -y --no-install-recommends -qq \
-    curl=7.88.1-10+deb12u14 \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+FROM python:3.14.10-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -19,13 +13,13 @@ ENV PYTHONUNBUFFERED=1 \
 ENV PATH="$VENV_PATH/bin:$PATH"
 
 
-FROM base as builder
+FROM base AS builder
 
 # Build dependencies installed only in builder stage
 RUN apt-get update && apt-get install -y --no-install-recommends -qq \
-    gcc=4:12.2.0-3 \
-    libffi-dev=3.4.4-1 \
-    g++=4:12.2.0-3 \
+    gcc=4:14.2.0-1 \
+    libffi-dev=3.4.8-2 \
+    g++=4:14.2.0-1 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -41,7 +35,7 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-root --no-directory
 
 
-FROM base as production
+FROM base AS production
 
 # Copy only the virtual environment from builder
 COPY --from=builder /build/.venv $VENV_PATH
@@ -53,6 +47,16 @@ COPY --chown=www-data:www-data src/ ./src/
 COPY --chown=www-data:www-data scripts/ ./scripts/
 COPY --chown=www-data:www-data interfaces/ ./interfaces/
 
+# Set by the CI build of the image; a build without these args keeps the placeholders of the repo file.
+ARG BUILD_VERSION
+ARG BUILD_BRANCH
+ARG BUILD_COMMIT
+COPY --chown=www-data:www-data build-info.json ./
+RUN if [ -n "$BUILD_COMMIT" ]; then \
+      printf '{"version":"%s","branch":"%s","commit":"%s"}\n' \
+        "$BUILD_VERSION" "$BUILD_BRANCH" "$BUILD_COMMIT" > build-info.json; \
+    fi
+
 ENV PROMETHEUS_PORT=9000 \
     SERVER_PORT=9010
 
@@ -62,6 +66,6 @@ EXPOSE $PROMETHEUS_PORT $SERVER_PORT
 USER www-data
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:$SERVER_PORT/health || exit 1
+    CMD ["python3", "-m", "src.healthcheck"]
 
 ENTRYPOINT ["python3", "-m", "src.main"]

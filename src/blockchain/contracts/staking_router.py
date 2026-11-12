@@ -10,13 +10,28 @@ logger = structlog.get_logger(__name__)
 class StakingRouterContract(ContractInterface):
     abi_path = "./interfaces/StakingRouter.json"
 
+    def get_staking_module_ids(
+        self, block_identifier: BlockIdentifier = "latest"
+    ) -> list[int]:
+        response = self.functions.getStakingModuleIds().call(
+            block_identifier=block_identifier
+        )
+        logger.debug(
+            {
+                "msg": "Call `getStakingModuleIds()`.",
+                "value": response,
+                "block_identifier": repr(block_identifier),
+            }
+        )
+        return list(response)
+
     def get_staking_module(
         self, id: int, block_identifier: BlockIdentifier = "latest"
     ) -> ChecksumAddress:
         response = self.functions.getStakingModule(id).call(
             block_identifier=block_identifier
         )
-        logger.info(
+        logger.debug(
             {
                 "msg": f"Call `getStakingModule({id})`.",
                 "value": response,

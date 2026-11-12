@@ -1,0 +1,15 @@
+[
+  {
+    "inputs": [],
+    "name": "EXIT_PENALTIES",
+    "outputs": [
+      {
+        "internalType": "contract IExitPenalties",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

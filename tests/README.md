@@ -85,17 +85,18 @@ The tests are organized into the following classes:
 #### `TestDecodeTransactionInput`
 - Tests for `_decode_transaction_input()` method
 - Tests both `submitReportData` and `submitExitRequestsData` decoding
+- Tests submissions wrapped in a forwarder's `execute(address,bytes)` calldata
+- Tests picking the submission that matches the event's `exitRequestsHash`
 - Handles decode failures
 
-#### `TestProcessSubmitReportData`
-- Tests for `_process_submit_report_data()` method
+#### `TestExitRequestsHash`
+- Tests that `_exit_requests_hash()` reproduces VEBO's
+  `keccak256(abi.encode(data, dataFormat))`
+
+#### `TestStoreExitRequests`
+- Tests for `_store_exit_requests()` method
 - Validator storage
 - Zero requests handling
-
-#### `TestProcessSubmitExitRequestsData`
-- Tests for `_process_submit_exit_requests_data()` method
-- Processing state retrieval
-- Validator storage
 
 #### `TestGetValidatorsForData`
 - Tests for `get_validators_for_data()` method

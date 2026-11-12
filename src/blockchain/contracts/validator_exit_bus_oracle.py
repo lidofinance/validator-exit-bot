@@ -1,12 +1,19 @@
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 from eth_typing import ChecksumAddress, HexStr
+from eth_utils.abi import function_signature_to_4byte_selector
+from eth_utils.conversions import to_bytes
 from web3.types import BlockIdentifier, EventData
 
 from src.blockchain.contracts.base_interface import ContractInterface
 
 logger = structlog.get_logger(__name__)
+
+# VEBO entry points that carry packed exit requests data.
+SUBMIT_FUNCTION_NAMES = ("submitReportData", "submitExitRequestsData")
+
+SELECTOR_LENGTH = 4
 
 
 class ValidatorExitBusOracleContract(ContractInterface):
@@ -29,51 +36,65 @@ class ValidatorExitBusOracleContract(ContractInterface):
         )
         return events
 
-    def decode_submit_report_data(self, input_data: HexStr) -> Optional[dict[str, Any]]:
-        """
-        Decode transaction input data as submitReportData function call.
+    def _submit_selectors(self) -> dict[bytes, str]:
+        """Map the 4-byte selector of every exit requests entry point to its name."""
+        return {
+            function_signature_to_4byte_selector(
+                self.get_function_by_name(name).signature
+            ): name
+            for name in SUBMIT_FUNCTION_NAMES
+        }
 
-        Returns None if decoding fails.
-        """
-        try:
-            func, params = self.decode_function_input(input_data)
-            if func.fn_name == "submitReportData":
-                logger.info({"msg": "Successfully decoded as submitReportData"})
-                return params
-            return None
-        except Exception as e:
-            logger.warning(
-                {
-                    "msg": "Failed to decode as submitReportData",
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                }
-            )
-            return None
-
-    def decode_submit_exit_requests_data(
+    def find_exit_requests_calls(
         self, input_data: HexStr
-    ) -> Optional[dict[str, Any]]:
+    ) -> list[tuple[str, dict[str, Any]]]:
         """
-        Decode transaction input data as submitExitRequestsData function call.
+        Find every exit requests submission inside a transaction's calldata.
 
-        Returns None if decoding fails.
+        Oracle members submit reports either directly to VEBO or through a
+        forwarder contract (each member owns an `execute(address,bytes)` proxy on
+        Hoodi), so the VEBO call can sit at any offset inside the outer calldata.
+        Scanning for the known selectors instead of decoding the outer call keeps
+        the bot independent of the submission path and of the wrapper's ABI.
+
+        A hit is only a candidate: an arbitrary 4-byte window may coincide with a
+        selector, so the caller must confirm the payload against the
+        `exitRequestsHash` of the ExitDataProcessing event before acting on it.
+
+        Returns:
+            List of (function_name, decoded_params), ordered by calldata offset.
         """
-        try:
-            func, params = self.decode_function_input(input_data)
-            if func.fn_name == "submitExitRequestsData":
-                logger.info({"msg": "Successfully decoded as submitExitRequestsData"})
-                return params
-            return None
-        except Exception as e:
-            logger.warning(
-                {
-                    "msg": "Failed to decode as submitExitRequestsData",
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                }
-            )
-            return None
+        calldata = to_bytes(hexstr=input_data)
+        selectors = self._submit_selectors()
+        calls: list[tuple[str, dict[str, Any]]] = []
+
+        for offset in range(len(calldata) - SELECTOR_LENGTH + 1):
+            if calldata[offset : offset + SELECTOR_LENGTH] not in selectors:
+                continue
+            try:
+                func, params = self.decode_function_input(
+                    self.w3.to_hex(calldata[offset:])
+                )
+            except Exception as e:  # noqa: BLE001 - probing arbitrary offsets
+                logger.debug(
+                    {
+                        "msg": "Selector match did not decode, skipping",
+                        "offset": offset,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    }
+                )
+                continue
+            calls.append((func.fn_name, params))
+
+        logger.info(
+            {
+                "msg": "Scanned transaction calldata for exit requests submissions",
+                "calldata_length": len(calldata),
+                "candidates": [name for name, _ in calls],
+            }
+        )
+        return calls
 
     def trigger_exits(
         self,

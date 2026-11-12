@@ -15,33 +15,33 @@ class TestCLClientInit:
     def test_url_without_trailing_slash(self):
         """Test that URL without trailing slash gets one added."""
         client = CLClient("https://beacon.example.com")
-        assert client.url == "https://beacon.example.com/"
+        assert client.urls == ["https://beacon.example.com/"]
 
     def test_url_with_trailing_slash(self):
         """Test that URL with trailing slash stays normalized."""
         client = CLClient("https://beacon.example.com/")
-        assert client.url == "https://beacon.example.com/"
+        assert client.urls == ["https://beacon.example.com/"]
 
     def test_url_with_path_and_no_trailing_slash(self):
         """Test that URL with path component gets trailing slash added."""
         client = CLClient("https://lb.drpc.org/eth-beacon-chain/API_KEY")
-        assert client.url == "https://lb.drpc.org/eth-beacon-chain/API_KEY/"
+        assert client.urls == ["https://lb.drpc.org/eth-beacon-chain/API_KEY/"]
 
     def test_url_with_path_and_trailing_slash(self):
         """Test that URL with path and trailing slash stays normalized."""
         client = CLClient("https://lb.drpc.org/eth-beacon-chain/API_KEY/")
-        assert client.url == "https://lb.drpc.org/eth-beacon-chain/API_KEY/"
+        assert client.urls == ["https://lb.drpc.org/eth-beacon-chain/API_KEY/"]
 
     def test_url_with_multiple_trailing_slashes(self):
         """Test that multiple trailing slashes are normalized to one."""
         client = CLClient("https://beacon.example.com///")
-        assert client.url == "https://beacon.example.com/"
+        assert client.urls == ["https://beacon.example.com/"]
 
 
 class TestCLClientGetAllValidators:
     """Test get_all_validators method."""
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_all_validators_success(self, mock_get):
         """Test successful retrieval of all validators."""
         mock_response = Mock()
@@ -63,7 +63,7 @@ class TestCLClientGetAllValidators:
             timeout=60,
         )
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_all_validators_with_api_key_in_url(self, mock_get):
         """Test that API key path is preserved in URL construction."""
         mock_response = Mock()
@@ -79,11 +79,14 @@ class TestCLClientGetAllValidators:
             timeout=60,
         )
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_all_validators_http_error(self, mock_get):
         """Test that HTTP errors are raised."""
         mock_response = Mock()
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404")
+        mock_response.status_code = 404
+        mock_response.raise_for_status.side_effect = requests.HTTPError(
+            "404", response=mock_response
+        )
         mock_get.return_value = mock_response
 
         client = CLClient("https://beacon.example.com")
@@ -94,7 +97,7 @@ class TestCLClientGetAllValidators:
 class TestCLClientGetValidatorsByIndexes:
     """Test get_validators_by_indexes method."""
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validators_by_indexes_success(self, mock_get):
         """Test successful retrieval and mapping of validators by index."""
         mock_response = Mock()
@@ -133,7 +136,7 @@ class TestCLClientEnsure0xPrefix:
 class TestCLClientGetValidatorIndexByPubkey:
     """Test get_validator_index_by_pubkey method."""
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_index_by_pubkey_success(self, mock_get):
         """Test successful retrieval of validator index."""
         mock_response = Mock()
@@ -152,7 +155,7 @@ class TestCLClientGetValidatorIndexByPubkey:
             timeout=10,
         )
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_index_by_pubkey_without_0x_prefix(self, mock_get):
         """Test that pubkey without 0x prefix is handled correctly."""
         mock_response = Mock()
@@ -172,7 +175,7 @@ class TestCLClientGetValidatorIndexByPubkey:
             timeout=10,
         )
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_index_by_pubkey_with_api_key(self, mock_get):
         """Test that pubkey endpoint preserves API key in URL."""
         mock_response = Mock()
@@ -188,7 +191,7 @@ class TestCLClientGetValidatorIndexByPubkey:
             timeout=10,
         )
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_index_by_pubkey_not_found(self, mock_get):
         """Test error handling when validator not found."""
         mock_response = Mock()
@@ -205,7 +208,7 @@ class TestCLClientGetValidatorIndexByPubkey:
 class TestCLClientGetValidatorByPubkey:
     """Test get_validator_by_pubkey method."""
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_by_pubkey_success(self, mock_get):
         """Test successful retrieval of validator data."""
         mock_response = Mock()
@@ -226,7 +229,7 @@ class TestCLClientGetValidatorByPubkey:
         assert validator["index"] == "12345"
         assert validator["status"] == "active_ongoing"
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_by_pubkey_api_error(self, mock_get):
         """Test handling of API error response."""
         mock_response = Mock()
@@ -239,11 +242,14 @@ class TestCLClientGetValidatorByPubkey:
 
         assert validator is None
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_by_pubkey_http_error(self, mock_get):
         """Test handling of HTTP errors (404, 500, etc)."""
         mock_response = Mock()
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_response.status_code = 404
+        mock_response.raise_for_status.side_effect = requests.HTTPError(
+            "404 Not Found", response=mock_response
+        )
         mock_get.return_value = mock_response
 
         client = CLClient("https://beacon.example.com")
@@ -252,7 +258,7 @@ class TestCLClientGetValidatorByPubkey:
 
         assert validator is None
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_by_pubkey_timeout(self, mock_get):
         """Test handling of request timeout."""
         mock_get.side_effect = requests.Timeout("Request timed out")
@@ -263,7 +269,7 @@ class TestCLClientGetValidatorByPubkey:
 
         assert validator is None
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_get_validator_by_pubkey_without_0x_prefix(self, mock_get):
         """Test that pubkey without 0x prefix is handled correctly."""
         mock_response = Mock()
@@ -291,7 +297,7 @@ class TestCLClientGetValidatorByPubkey:
 class TestCLClientIsValidatorExited:
     """Test is_validator_exited method."""
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_is_validator_exited_active_ongoing(self, mock_get):
         """Test validator that is still active."""
         mock_response = Mock()
@@ -307,7 +313,7 @@ class TestCLClientIsValidatorExited:
         assert is_exited is False
         assert is_error is False
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_is_validator_exited_active_exiting(self, mock_get):
         """Test validator that is in the process of exiting."""
         mock_response = Mock()
@@ -323,7 +329,7 @@ class TestCLClientIsValidatorExited:
         assert is_exited is True
         assert is_error is False
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_is_validator_exited_exited_unslashed(self, mock_get):
         """Test validator that has exited."""
         mock_response = Mock()
@@ -339,7 +345,7 @@ class TestCLClientIsValidatorExited:
         assert is_exited is True
         assert is_error is False
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_is_validator_exited_withdrawal_done(self, mock_get):
         """Test validator that has fully withdrawn."""
         mock_response = Mock()
@@ -355,11 +361,14 @@ class TestCLClientIsValidatorExited:
         assert is_exited is True
         assert is_error is False
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_is_validator_exited_cl_error(self, mock_get):
         """Test handling of CL API errors."""
         mock_response = Mock()
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_response.status_code = 404
+        mock_response.raise_for_status.side_effect = requests.HTTPError(
+            "404 Not Found", response=mock_response
+        )
         mock_get.return_value = mock_response
 
         client = CLClient("https://beacon.example.com")
@@ -369,7 +378,7 @@ class TestCLClientIsValidatorExited:
         assert is_exited is False
         assert is_error is True
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_is_validator_exited_api_returns_error(self, mock_get):
         """Test when API returns error in response."""
         mock_response = Mock()
@@ -383,7 +392,7 @@ class TestCLClientIsValidatorExited:
         assert is_exited is False
         assert is_error is True
 
-    @patch("src.utils.cl_client.requests.get")
+    @patch("src.utils.cl_client.requests.Session.get")
     def test_is_validator_exited_case_insensitive(self, mock_get):
         """Test that status comparison is case insensitive."""
         mock_response = Mock()
