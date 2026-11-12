@@ -1,0 +1,34 @@
+name: "[K8S] Build and push validator-exit-bot to dev"
+
+run-name: "[K8S] Build and push validator-exit-bot:${{ inputs.tag || 'dev' }} to dev"
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to push
+        required: false
+        type: string
+        default: dev
+  push:
+    branches:
+      - develop
+    paths-ignore:
+      - '.github/**'
+      - 'tests/**'
+      - '**.md'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    uses: lidofinance/actions/.github/workflows/k8s-build-push-harbor.yml@c7b5b6c5d8013046347d728d748fa741eb214e28
+    with:
+      tag: ${{ inputs.tag || 'dev' }}
+      registry: registry.dev.k8s-dev.org
+      registry_username: ${{ vars.REGISTRY_USERNAME }}
+      image: team-staking-core/validator-exit-bot
+      environment: harbor_dev_release
+    secrets:
+      registry_token: ${{ secrets.HARBOR_DEV_TOKEN }}
