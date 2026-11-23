@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   save-release-tag:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Validate and save stable release tag
