@@ -97,8 +97,11 @@ poetry run python -m scripts.generate \
 
 ### 1. Build the Docker Image
 
+The base images come from Docker Hardened Images. Log in to `dhi.io` with a Docker account before the build.
+
 ```bash
 cd validator-exit-bot
+docker login dhi.io
 docker build -t validator-exit-bot .
 ```
 

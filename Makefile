@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell health metrics clean rebuild test test-cov test-watch lint format
+.PHONY: help build up down restart logs health metrics clean rebuild test test-cov test-watch lint format
 
 # Default target
 help:
@@ -12,7 +12,6 @@ help:
 	@echo "  down        Stop and remove the bot container"
 	@echo "  restart     Restart the bot"
 	@echo "  logs        Follow the bot logs"
-	@echo "  shell       Open a shell in the running container"
 	@echo "  health      Check the bot health status"
 	@echo "  metrics     Display Prometheus metrics"
 	@echo "  clean       Remove containers, images, and volumes"
@@ -50,10 +49,6 @@ restart:
 # Follow logs
 logs:
 	docker-compose logs -f validator-exit-bot
-
-# Open shell in container
-shell:
-	docker-compose exec validator-exit-bot /bin/bash
 
 # Check health
 health:
