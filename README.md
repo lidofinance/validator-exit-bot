@@ -98,6 +98,9 @@ At start the bot logs its build and the whole config with the secret values show
 #### Using Docker (Recommended)
 
 ```bash
+# Log in to the registry of the base images (Docker Hardened Images) with a Docker account
+docker login dhi.io
+
 # Build the Docker image
 docker build -t validator-exit-bot .
 
